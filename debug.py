@@ -18,12 +18,33 @@ from langgraph.prebuilt import ToolNode
 from langgraph.graph import StateGraph, START, END
 from langchain_google_genai import ChatGoogleGenerativeAI
 
+from collections.abc import Iterable
+from random import randint
+
+from langchain_core.messages.tool import ToolMessage
+
+
+from langchain_core.tools import tool
+from typing import List, Dict, Optional
+import requests
+import json
+import traceback
+
+from io import BytesIO
+from PIL import Image
+
+
+from prompts import TRIPADVISOR_SYSINT, WELCOME_MSG
 
 load_dotenv()
 
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 GOOGLE_CSE_ID= os.getenv("GOOGLE_CSE_ID")
 GOOGLE_SEARCH_KEY= os.getenv("GOOGLE_SEARCH_KEY")
+
+for env_var in ["GOOGLE_API_KEY", "GOOGLE_CSE_ID", "GOOGLE_SEARCH_KEY"]:
+    if env_var is None:
+        raise ValueError(f"{env_var} must be set")
 
 class SearchState(TypedDict):
     """State representing the customer's search conversation."""
@@ -40,58 +61,20 @@ class SearchState(TypedDict):
     # Flag indicating that the search is placed and completed.
     finished: bool
 
-TRIPADVISOR_SYSINT = (
-    "system",  # 'system' indicates the message is a system instruction.
-    "You are a helpful and friendly Trip Advisor bot. A human will ask you for recommendations "
-    "and information about transportation to use, places to visit, activities to do, restaurants to eat at, and "
-    "accommodations to stay in. Your primary goal is to provide relevant and accurate information "
-    "based on the user's requests, helping them plan their trip effectively. "
-    "You can ask clarifying questions to better understand their preferences and needs. "
-    "Avoid engaging in off-topic discussions and focus solely on trip-related inquiries. "
-    "\n\n"
-    "You have access to several tools to assist the user:"
-    "\n"
-    "- `search_places`: Use this tool to find information about specific places, attractions, "
-    "restaurants, or accommodations. The input should be a detailed query including location "
-    "and keywords describing what the user is looking for (e.g., 'best beaches in Barcelona', "
-    "'romantic restaurants near Sagrada Familia', 'budget-friendly hotels in the Gothic Quarter')."
-    "If the user asks for a list of places, ALWAYS respond with a "
-    "search_places tool call (no text) whose arguments include at least "
-    '{"query": "<user request>"} . After the tool returns, summarise the results.'
 
-    "\n"
-    "- `get_place_details`: Use this tool to retrieve more detailed information about a specific "
-    "place identified by its unique ID (which you might have obtained from `search_places`). "
-    "The input should be the place ID."
-    "\n"
-    "- `get_directions`: Use this tool to provide directions between two locations. The input "
-    "should include the starting point and the destination."
-    "\n"
-    "- `translate_text`: Use this tool to translate text between languages. The input should "
-    "include the text to translate and the target language."
-    "\n\n"
-    "When responding to the user, synthesize information from these tools into a coherent and "
-    "helpful answer. If a user asks for recommendations, use `search_places` with relevant keywords "
-    "and present a few options. You can then use `get_place_details` if the user expresses interest "
-    "in a specific option. If the user asks for how to get somewhere, use `get_directions`. If there's "
-    "a language barrier, offer to use `translate_text`."
-    "\n\n"
-    "Remember to be polite and helpful throughout the interaction. If you cannot find information "
-    "related to the user's request, acknowledge this and suggest alternative ways you might be able to assist."
-    "\n\n"
-    "If any of the tools are unavailable, you can break the fourth wall and tell the user that "
-    "they have not implemented them yet and should keep reading to do so.",
-)
+google_search_llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash")
+supervisor_llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash")
 
-WELCOME_MSG = "Welcome to the TripoBot. Type `q` to quit. What is your dream trip? how much is your budget? what activity do you like to do? Do you like blind trip program?"
-
-llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash")
+# The default recursion limit for traversing nodes is 25 - setting it higher means
+# you can try a more complex search with multiple steps and round-trips (and you
+# can chat for longer!)
+config = {"recursion_limit": 25}
 
 
 def chatbot(state: SearchState) -> SearchState:
     """The chatbot itself. A simple wrapper around the model's own chat interface."""
     message_history = [TRIPADVISOR_SYSINT] + state["messages"]
-    return {"messages": [llm.invoke(message_history)]}
+    return {"messages": [supervisor_llm.invoke(message_history)]}
 
 
 def human_node(state: SearchState) -> SearchState:
@@ -115,16 +98,7 @@ def maybe_exit_human_node(state: SearchState) -> Literal["chatbot", "__end__"]:
     else:
         return "chatbot"
 
-# The default recursion limit for traversing nodes is 25 - setting it higher means
-# you can try a more complex search with multiple steps and round-trips (and you
-# can chat for longer!)
-config = {"recursion_limit": 25}
 
-from langchain_core.tools import tool
-from typing import List, Dict, Optional
-import requests
-import json
-import traceback
 
 @tool("google_web_search")
 def google_web_search(
@@ -179,21 +153,24 @@ def google_web_search(
         "Give each place a one‑sentence description.\n\n"
         f"{json.dumps(compact, ensure_ascii=False, indent=2)}"
     )
+    
+    # print("search summary", compact)
+    # print("items", items[0])
 
     # summerization with LLM ───────────────────────────────────
-    summary = llm.invoke(prompt).content
+    summary = google_search_llm.invoke(prompt).content
     # Return as a dictionary with a tag (or using your message format) so that the router knows it is from tool.
     return {"content": summary, "from": "tool"}
 
 
-from langgraph.prebuilt import ToolNode
+
 
 # Define the tools and create a "tools" node.
 tools = [google_web_search]
 tool_node = ToolNode(tools)
 
 # Attach the tools to the model so that it knows what it can call.
-llm_with_tools = llm.bind_tools(tools)
+google_search_llm = google_search_llm.bind_tools(tools)
 
 
 def maybe_route_to_tools(state: SearchState) -> str:
@@ -230,7 +207,7 @@ def chatbot_with_tools(state: SearchState) -> SearchState:
     defaults = {"search": [], "finished": False}
 
     if state["messages"]:
-        new_output = llm_with_tools.invoke([TRIPADVISOR_SYSINT] + state["messages"])
+        new_output = google_search_llm.invoke([TRIPADVISOR_SYSINT] + state["messages"])
     else:
         new_output = AIMessage(content=WELCOME_MSG)
 
@@ -238,10 +215,7 @@ def chatbot_with_tools(state: SearchState) -> SearchState:
     # overriding only the "messages" field.
     return defaults | state | {"messages": [new_output]}
 
-from collections.abc import Iterable
-from random import randint
 
-from langchain_core.messages.tool import ToolMessage
 
 def search_node(state: SearchState) -> SearchState:
     """The searching node. This is where the search state is manipulated."""
@@ -295,7 +269,13 @@ graph_builder.add_edge("searching", "chatbot")
 graph_builder.add_edge(START, "chatbot")
 graph_with_menu = graph_builder.compile()
 
-# Image(graph_with_menu.get_graph().draw_mermaid_png())
 
-state = graph_with_menu.invoke({"messages": []}, config)
+
+stream = BytesIO(graph_with_menu.get_graph().draw_mermaid_png())
+image = Image.open(stream).convert("RGBA")
+image.save("final_graph.png")
+
+# image = Image(graph_with_menu.get_graph().draw_mermaid_png())
+
+# state = graph_with_menu.invoke({"messages": []}, config)
 
