@@ -18,6 +18,23 @@ from langgraph.prebuilt import ToolNode
 from langgraph.graph import StateGraph, START, END
 from langchain_google_genai import ChatGoogleGenerativeAI
 
+from collections.abc import Iterable
+from random import randint
+
+from langchain_core.messages.tool import ToolMessage
+
+
+from langchain_core.tools import tool
+from typing import List, Dict, Optional
+import requests
+import json
+import traceback
+
+from io import BytesIO
+from PIL import Image
+
+
+from prompts import TRIPADVISOR_SYSINT, WELCOME_MSG
 
 load_dotenv()
 
@@ -25,8 +42,15 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 GOOGLE_CSE_ID= os.getenv("GOOGLE_CSE_ID")
 GOOGLE_SEARCH_KEY= os.getenv("GOOGLE_SEARCH_KEY")
 
+
 os.environ['KAGGLE_USERNAME'] = os.getenv("KAGGLE_USERNAME")  # replace with your Kaggle username
 os.environ['KAGGLE_KEY'] = os.getenv("KAGGLE_KEY")          # replace with your Kaggle API key
+
+for env_var in ["GOOGLE_API_KEY", "GOOGLE_CSE_ID", "GOOGLE_SEARCH_KEY"]:
+    if env_var is None:
+        raise ValueError(f"{env_var} must be set")
+
+
 class SearchState(TypedDict):
     """State representing the customer's search conversation."""
 
@@ -41,6 +65,7 @@ class SearchState(TypedDict):
 
     # Flag indicating that the search is placed and completed.
     finished: bool
+
 
 TRIPADVISOR_SYSINT = (
     "system",  # 'system' indicates the message is a system instruction.
@@ -86,10 +111,19 @@ WELCOME_MSG = "Welcome to the TripoBot. Type `q` to quit. What is your dream tri
 llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash")
 
 
+google_search_llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash")
+supervisor_llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash")
+
+# The default recursion limit for traversing nodes is 25 - setting it higher means
+# you can try a more complex search with multiple steps and round-trips (and you
+# can chat for longer!)
+config = {"recursion_limit": 25}
+
+
 def chatbot(state: SearchState) -> SearchState:
     """The chatbot itself. A simple wrapper around the model's own chat interface."""
     message_history = [TRIPADVISOR_SYSINT] + state["messages"]
-    return {"messages": [llm.invoke(message_history)]}
+    return {"messages": [supervisor_llm.invoke(message_history)]}
 
 
 def human_node(state: SearchState) -> SearchState:
@@ -113,16 +147,7 @@ def maybe_exit_human_node(state: SearchState) -> Literal["chatbot", "__end__"]:
     else:
         return "chatbot"
 
-# The default recursion limit for traversing nodes is 25 - setting it higher means
-# you can try a more complex search with multiple steps and round-trips (and you
-# can chat for longer!)
-config = {"recursion_limit": 25}
 
-from langchain_core.tools import tool
-from typing import List, Dict, Optional
-import requests
-import json
-import traceback
 
 @tool("activity_search")
 def activity_search(
@@ -177,10 +202,13 @@ def activity_search(
         "Give each activity a one‑sentence description.\n\n"
         f"{json.dumps(compact, ensure_ascii=False, indent=2)}"
     )
+    
+    # print("search summary", compact)
+    # print("items", items[0])
 
 
     # summerization with LLM ───────────────────────────────────
-    summary = llm.invoke(prompt).content
+    summary = google_search_llm.invoke(prompt).content
     # Return as a dictionary with a tag (or using your message format) so that the router knows it is from tool.
     return {"content": summary, "from": "tool"}
 
@@ -378,14 +406,14 @@ def accommodation_search(query: str,
         traceback.print_exc()
         return {"content": f"Accommodation search error: {e}", "from": "tool"}
 
-from langgraph.prebuilt import ToolNode
+
 
 # Define the tools and create a "tools" node.
 tools = [activity_search, accommodation_search]
 tool_node = ToolNode(tools)
 
 # Attach the tools to the model so that it knows what it can call.
-llm_with_tools = llm.bind_tools(tools)
+google_search_llm = google_search_llm.bind_tools(tools)
 
 
 def maybe_route_to_tools(state: SearchState) -> str:
@@ -422,13 +450,14 @@ def chatbot_with_tools(state: SearchState) -> SearchState:
     defaults = {"search": [], "finished": False}
 
     if state["messages"]:
-        new_output = llm_with_tools.invoke([TRIPADVISOR_SYSINT] + state["messages"])
+        new_output = google_search_llm.invoke([TRIPADVISOR_SYSINT] + state["messages"])
     else:
         new_output = AIMessage(content=WELCOME_MSG)
 
     # Set up some defaults if not already set, then pass through the provided state,
     # overriding only the "messages" field.
     return defaults | state | {"messages": [new_output]}
+
 
 from langchain_core.messages.tool import ToolMessage
 
@@ -495,7 +524,13 @@ graph_builder.add_edge("searching", "chatbot")
 graph_builder.add_edge(START, "chatbot")
 graph_with_menu = graph_builder.compile()
 
-# Image(graph_with_menu.get_graph().draw_mermaid_png())
+
+
+stream = BytesIO(graph_with_menu.get_graph().draw_mermaid_png())
+image = Image.open(stream).convert("RGBA")
+image.save("final_graph.png")
+
+# image = Image(graph_with_menu.get_graph().draw_mermaid_png())
 
 state = graph_with_menu.invoke({"messages": []}, config)
 
