@@ -98,6 +98,14 @@ TRIPADVISOR_SYSINT = (
     "and present a few options. You can then use `get_place_details` if the user expresses interest "
     "in a specific option. If the user asks for how to get somewhere, use `get_directions`. If there's "
     "a language barrier, offer to use `translate_text`."
+    "- `climate_destination_recommender`: Use this tool to analyze an image that reflects a specific climate, weather condition, or outdoor activity "
+    "such as a beach, ski resort, desert, or hiking trail. The input should include the path to the image file (uploaded by the user or provided as a local path). "
+    "This tool will interpret the scene shown in the image, identify the associated environment, and suggest one or more travel destinations with similar conditions "
+    "for the month of April (or another specified month). It also includes expected temperature ranges and relevant activities for the destination. "
+    "If the user provides a photo and asks for climate-based destination ideas, ALWAYS respond with a "
+    "`climate_destination_recommender` tool call (no text) whose arguments include at least "
+    '{"image_path": "<user image path>"} . After the tool returns, summarise the results.'
+    "\n"
     "\n\n"
     "Remember to be polite and helpful throughout the interaction. If you cannot find information "
     "related to the user's request, acknowledge this and suggest alternative ways you might be able to assist."
@@ -405,11 +413,83 @@ def accommodation_search(query: str,
     except Exception as e:
         traceback.print_exc()
         return {"content": f"Accommodation search error: {e}", "from": "tool"}
+import os
+import requests
+import google.generativeai as genai
+from PIL import Image
+import io
+# Setup Gemini
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+model = genai.GenerativeModel("gemini-2.0-flash-exp")
 
+def download_image_bytes(image_url: str) -> Image.Image:
+    """Download image from URL and return raw bytes."""
+    headers = {"User-Agent": "Mozilla/5.0"}
+    response = requests.get(image_url, headers=headers)
+    response.raise_for_status()
+    return Image.open(io.BytesIO(response.content))
 
+@tool('climate_destination_recommender')
+def climate_destination_recommender(image_url: str, 
+                                    style: str = "friendly", 
+                                    month: str = "April", **kwargs) -> str:
+    """
+    Uses Gemini 2.0-flash=exp to interpret the climate/activity from an image (local or URL),
+    then recommends similar destinations for that type of environment in a specific month.
+    """
+    try:
+        image_bytes = download_image_bytes(image_url)
+
+        prompt = (
+            f"This is a photo of a place or climate. Based on this image, describe:\n"
+            f"1. What kind of location or activity this seems to be (e.g., ski resort, beach, hiking trail).\n"
+            f"2. What kind of weather is represented.\n"
+            f"3. Suggest one or two destinations with similar climate in {month}.\n"
+            f"4. Include expected temperatures and recommended activities.\n"
+            f"5. Write in a {style} tone."
+        )
+
+        EXAMPLES = [
+            {
+                "img": download_image_bytes("https://upload.wikimedia.org/wikipedia/commons/9/9d/Seychelles_Beach.jpg"),
+                "month": "July",
+                "style": "friendly",
+                "answer": (
+                    "1. A tranquil tropical beach perfect for sun‑lounging and gentle swimming.\n"
+                    "2. Clear skies, bright sun, 28 °C with a light sea breeze.\n"
+                    "3. Try Bora Bora or the Maldives in July.\n"
+                    "4. Expect 27‑30 °C; plan for snorkeling, paddle‑boarding, and sunset cruises.\n"
+                    "5. Friendly tone 🙂: *Pack reef‑safe sunscreen and a good book; paradise awaits!*"
+                ),
+            },
+            {
+                "img": download_image_bytes("https://upload.wikimedia.org/wikipedia/commons/0/03/Panorama_vom_Gornergrat-Zermatt.jpg"),
+                "month": "January",
+                "style": "adventurous",
+                "answer": (
+                    "1. A high‑alpine ski resort with well‑groomed downhill runs.\n"
+                    "2. Crisp winter weather: −5 °C, light powder snow, low humidity.\n"
+                    "3. Consider Whistler (Canada) or St. Anton (Austria) in January.\n"
+                    "4. Temps −10 °C to −2 °C; carve fresh pistes, try night skiing, warm up with après‑ski fondue.\n"
+                    "5. Adventurous tone 🏂: *Strap in, breathe the icy air, and chase that first‑tracks adrenaline!*"
+                ),
+            },
+            ]
+        # Build the content list:  (ex1_img, ex1_answer, ex2_img, ex2_answer, target_img, prompt)
+        content = []
+        for ex in EXAMPLES:
+            content.extend([ex["img"], ex["answer"]])
+        content.extend([image_bytes, prompt])
+
+        response = model.generate_content(content)
+
+        return response.text.strip()
+
+    except Exception as e:
+        return f"❌ Error: {e}"
 
 # Define the tools and create a "tools" node.
-tools = [activity_search, accommodation_search]
+tools = [activity_search, accommodation_search, climate_destination_recommender]
 tool_node = ToolNode(tools)
 
 # Attach the tools to the model so that it knows what it can call.
@@ -490,6 +570,15 @@ def search_node(state: SearchState) -> SearchState:
 
             search.append(f'{tool_call["args"]} ({modifier_str})')
             response = "\n".join(search)
+
+        elif tool_call["name"] == "climate_destination_recommender":
+            # Each search item is just a string. This is where it assembled as "drink (modifiers, ...)".
+            modifiers = tool_call["args"]["modifiers"]
+            modifier_str = ", ".join(modifiers) if modifiers else "no modifiers"
+
+            search.append(f'{tool_call["args"]} ({modifier_str})')
+            response = "\n".join(search)
+
         else:
             raise NotImplementedError(f'Unknown tool call: {tool_call["name"]}')
 
