@@ -312,7 +312,7 @@ chain = graph.compile()
 # from PIL import Image
 # stream = BytesIO(chain.get_graph().draw_mermaid_png())
 # image = Image.open(stream).convert("RGBA")
-# image.save("more_complete_graph.png")
+# image.save("flow_design.png")
 
 # --- Example Usage ---
 if __name__ == "__main__":
