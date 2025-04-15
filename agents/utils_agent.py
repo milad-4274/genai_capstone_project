@@ -27,7 +27,7 @@ def extract_json_from_response(text: str) -> dict:
     try:
         return json.loads(text.replace("'", '"'))
     except json.JSONDecodeError:
-        pass
+        msg = "JSON Decode Error"
 
     # Step 4: Try Python literal_eval
     try:
@@ -35,7 +35,7 @@ def extract_json_from_response(text: str) -> dict:
         if isinstance(result, dict):
             return result
     except (SyntaxError, ValueError):
-        pass
+        msg = "Syntax Error, ast error"
 
     # Step 5: Try extracting dictionary-like structure with regex
     match = re.search(r"\{.*\}", text, re.DOTALL)
@@ -43,6 +43,6 @@ def extract_json_from_response(text: str) -> dict:
         try:
             return ast.literal_eval(match.group())
         except Exception:
-            pass
+            msg = "Regex Error"
 
-    raise ValueError("Unable to parse LLM output into JSON")
+    raise ValueError("Unable to parse LLM output into JSON due " + msg)
