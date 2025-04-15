@@ -7,6 +7,9 @@ from langchain_core.tools import BaseTool
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langgraph.graph import StateGraph, END
 import os
+from agents import (AccommodationSearchAgent,
+                    agent_activity)
+from state import TripState
 from dotenv.main import load_dotenv
 import json
 from utils import extract_json_from_response
@@ -59,10 +62,14 @@ The planning flow typically includes:
 2. Collecting key trip information: `current_location`, `destination`, and `budget`.
 3. Assisting the user if they're unsure (e.g., suggesting destinations).
 4. Updating and validating the context.
-5. Researching visa eligibility and destination details.
-6. Generating and refining an itinerary.
-7. Providing a final personalized response.
+5. Researching accommodations for the given destination or query.
+6. Researching visa eligibility and destination details.
+7. Generating and refining an itinerary.
+8. Providing a final personalized response.
 
+**IMPORTANT**: 
+- Do **not** skip `get_accommodation` if `destination` and `budget` are available. 
+- This is mandatory before generating the final itinerary.
 ---
 
 ## 🧠 CONTEXT USAGE
@@ -80,6 +87,7 @@ The system maintains a `Current context`, which includes:
 - `next_node`: next_node
 - `agent_input`: agent_input
 - `response`: response
+- `accommodation`: accommodation
 
 ---
 
@@ -90,6 +98,7 @@ You have access to the following agents:
 - **extract_preferences**: Extracts user's travel style and interests.
 - **get_location_visa**: Checks visa requirements based on nationality and destination.
 - **research_destination**: Gathers info about the destination.
+- **get_accommodation**: will recommend hotels in a city.
 - **plan_budget**: Provides a suggested trip budget breakdown.
 - **generate_itinerary**: Creates a draft itinerary.
 - **refine_itinerary**: Improves the itinerary based on feedback.
@@ -189,72 +198,6 @@ llm_itinerary = ChatGoogleGenerativeAI(model="gemini-2.0-flash", google_api_key=
 llm_refinement = ChatGoogleGenerativeAI(model="gemini-2.0-flash", google_api_key=GOOGLE_API_KEY, temperature=0.1)
 llm_user_input = ChatGoogleGenerativeAI(model="gemini-2.0-flash", google_api_key=GOOGLE_API_KEY, temperature=0.5)
 
-# --- State Definition ---
-class TripState:
-    chat_history: List[str] = None
-    user_preferences: str = None
-    current_location: str = None
-    destination: str = None
-    visa_eligibility: str = None
-    budget: str = None
-    destination_info: str = None
-    itinerary_draft: str = None
-    personalized_itinerary: str = None
-    messages: List[BaseMessage]
-    next_node: str = None # Added for supervisor
-    agent_input: str = None # Added for supervisor
-    response: str = None # Added for final response
-
-    def __init__(self, chat_history: str, **kwargs):
-        self.chat_history = [chat_history]
-        self.user_preferences = kwargs.get("user_preferences", chat_history)
-        self.current_location = kwargs.get("current_location")
-        self.destination = kwargs.get("destination")
-        self.visa_eligibility = kwargs.get("visa_eligibility")
-        self.budget = kwargs.get("budget")
-        self.destination_info = kwargs.get("destination_info")
-        self.itinerary_draft = kwargs.get("itinerary_draft")
-        self.personalized_itinerary = kwargs.get("personalized_itinerary")
-        self.next_node = kwargs.get("next_node") # Added
-        self.agent_input = kwargs.get("agent_input") # Added
-        self.response = kwargs.get("response")
-    
-    def get_chat_history(self):
-        # print("Appending to Chat history", response)
-        # self.chat_history.append(response)
-        return self.chat_history
-    
-    def __repr__(self):
-        return f"""
-    chat_history : {self.chat_history}
-    user_preferences : {self.user_preferences}
-    current_location : {self.current_location}
-    destination : {self.destination}
-    visa_eligibility : {self.visa_eligibility}
-    budget : {self.budget}
-    destination_info : {self.destination_info}
-    itinerary_draft : {self.itinerary_draft}
-    personalized_itinerary : {self.personalized_itinerary}
-    next_node : {self.next_node}
-    agent_input : {self.agent_input}
-    response : {self.response}
-    """
-    
-    def __str__(self):
-        return f"""
-    chat_history : {self.chat_history}
-    user_preferences : {self.user_preferences}
-    current_location : {self.current_location}
-    destination : {self.destination}
-    visa_eligibility : {self.visa_eligibility}
-    budget : {self.budget}
-    destination_info : {self.destination_info}
-    itinerary_draft : {self.itinerary_draft}
-    personalized_itinerary : {self.personalized_itinerary}
-    next_node : {self.next_node}
-    agent_input : {self.agent_input}
-    response : {self.response}
-    """
 # --- Worker Agent Definitions ---
 
 # Supervisor Node
@@ -277,7 +220,14 @@ def supervisor_node(state: TripState):
         if "agent" in response:
             agent_name = response["agent"]
             agent_input = response.get("input")  # Pass user input
-            return {"next_node": agent_name, "agent_input": agent_input}
+            if agent_name == "get_accommodation" and not state.accommodation:
+                full_query = state.chat_history[-1]      # last user turn
+                return {"next_node": agent_name, "agent_input": full_query}
+            elif agent_name != "get_accommodation":
+                return {"next_node": agent_name, "agent_input": agent_input}
+            else:
+                # Skip accommodation call since it's already done
+                return {"next_node": "supervisor"}  # Reinvoke supervisor or go to another fallback
         elif "action" in response:
             print("Final Result: \n", response["response"])
             return {"next_node": END}
@@ -417,6 +367,8 @@ graph.add_node("update_information", update_information)
 graph.add_node("extract_preferences", extract_preferences)
 graph.add_node("get_location_visa", get_location_visa)
 graph.add_node("research_destination", research_destination)
+acc_agent = AccommodationSearchAgent()
+graph.add_node("get_accommodation", acc_agent)
 graph.add_node("plan_budget", plan_budget)
 graph.add_node("generate_itinerary", generate_itinerary)
 graph.add_node("refine_itinerary", refine_itinerary)
@@ -433,6 +385,7 @@ graph.add_edge("update_information","supervisor")
 graph.add_edge("extract_preferences","supervisor")
 graph.add_edge("get_location_visa","supervisor")
 graph.add_edge("research_destination","supervisor")
+graph.add_edge("get_accommodation","supervisor")
 graph.add_edge("plan_budget","supervisor")
 graph.add_edge("generate_itinerary","supervisor")
 graph.add_edge("refine_itinerary","supervisor")
@@ -462,7 +415,7 @@ if __name__ == "__main__":
     # print("\nResult 2:", result2) # Will likely ask for a destination
 
     # Example 3: Initial input with destination but missing budget
-    inputs3 = {"chat_history": "Plan a trip to Rome."}
+    inputs3 = {"chat_history": "Plan a trip to Vienna, Austria. I live in berlin and my budget is 2988"}
     result3 = chain.invoke(inputs3)
     print("\nResult 3:", result3) # Will likely ask for a budget
 
