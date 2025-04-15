@@ -5,8 +5,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from utils_agent import extract_json_from_response
 from langchain.schema.output_parser import StrOutputParser
 from langchain.output_parsers import PydanticOutputParser
-from pydantic import BaseModel, Field
-from typing import List, Optional
+from data_models import Activity, DailyActivity, Itinerary
 
 
 load_dotenv()
@@ -16,29 +15,6 @@ GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
 if not GOOGLE_API_KEY:
     raise ValueError("Please set the GOOGLE_API_KEY environment variable.")
 
-
-
-
-
-# Define the structured output schema
-class Activity(BaseModel):
-    title: str
-    activity_type: str
-    time_of_day: str
-    estimated_start_time: str
-    estimated_duration: str
-    estimated_budget: str
-
-class DailyActivity(BaseModel):
-    day: int
-    title: str
-    daily_tips: str
-    activities: List[Activity]
-
-class Itinerary(BaseModel):
-    assumptions: List[str]
-    general_tips: List[str]
-    daily_activities: List[DailyActivity]
 
 # Create parser
 parser = PydanticOutputParser(pydantic_object=Itinerary)
@@ -105,10 +81,8 @@ Please create a day-by-day itinerary with tips and suggested activities. Make su
         format_instructions=parser.get_format_instructions(),
         **input_dict
     )
-    # chain = prompt | llm_itinerary | parser
     response = llm_itinerary.invoke(formatted_prompt)
     result = parser.parse(response.content)
-    # result = chain.invoke(input_dict)
     return result.model_dump()
 
 if __name__ == "__main__":
