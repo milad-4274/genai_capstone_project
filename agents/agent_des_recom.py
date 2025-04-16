@@ -3,7 +3,7 @@ import re
 import requests
 from langchain.output_parsers import PydanticOutputParser
 from langchain_google_genai import ChatGoogleGenerativeAI
-import google.generativeai as genai
+import google as genai
 from utils_agent import extract_json_from_response
 from tools import get_weather
 from data_models import DestinationRecommendationList

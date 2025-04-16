@@ -2,7 +2,7 @@ import os
 import chromadb
 import pandas as pd
 from google.api_core import retry
-import google.genai as genai
+import google as genai
 from typing import Dict, Any, List, Optional
 from langchain_google_genai import ChatGoogleGenerativeAI
 from chromadb import Documents, EmbeddingFunction, Embeddings
