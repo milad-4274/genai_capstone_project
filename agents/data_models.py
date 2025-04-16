@@ -1,5 +1,5 @@
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, RootModel
 from typing import List, Optional
 
 
@@ -40,3 +40,23 @@ class Transportation(BaseModel):
 
 class TransportationList(BaseModel):
     items: List[Transportation]
+
+
+class SillyTravelBriefing(BaseModel):
+    destination: str 
+    weather: str 
+    outfit: str 
+    language_tip: str 
+    safety_tip: str 
+    closing_remark: str 
+
+class DestinationRecommendation(BaseModel):
+    location_type: str
+    location_names: list[str]
+    weather_description: str
+    similar_destinations: List[str]
+    expected_temperatures: str
+    recommended_activities: List[str]
+    commentary: str
+class DestinationRecommendationList(RootModel[List[DestinationRecommendation]]):
+    pass
