@@ -68,7 +68,7 @@ Please create a day-by-day itinerary with tips and suggested activities. Make su
     
     for feature in required_input_features:
         if feature not in input_dict:
-            return "Agent Input Error: the input must include {feature}."
+            return f"Agent Input Error: the input must include {feature}."
     
     
     
@@ -93,4 +93,5 @@ if __name__ == "__main__":
   "preferences": "I love Arsenal, I enjoy going and watching historic sites I love doing physical activity I love to see local culture I love to see some of Iranian parts of cities or stores",
   "budget" : "1500 $",
 }''')
-    print(response)
+    import json
+    print(json.dumps(response))
