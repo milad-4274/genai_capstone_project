@@ -1,0 +1,199 @@
+import os
+import re
+import requests
+from typing import List
+from pydantic import BaseModel, RootModel
+from langchain.output_parsers import PydanticOutputParser
+from langchain_google_genai import ChatGoogleGenerativeAI
+import google.generativeai as genai
+from utils_agent import extract_json_from_response
+# from tools import get_weather
+from PIL import Image
+import io
+from dateutil import parser as date_parser
+from datetime import datetime, timedelta
+from dotenv.main import load_dotenv
+
+load_dotenv()
+
+# --- Configuration ---
+OWM_API_KEY = os.getenv("OWM_API_KEY")
+GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
+if not GOOGLE_API_KEY:
+    raise ValueError("Please set the GOOGLE_API_KEY environment variable.")
+
+# Setup Gemini
+llm = ChatGoogleGenerativeAI(
+    model="gemini-2.0-flash",  # Use Gemini multimodal
+    google_api_key=GOOGLE_API_KEY,
+    temperature=0.1,
+)
+class DestinationRecommendation(BaseModel):
+    location_type: str
+    location_names: List[str]
+    weather_description: str
+    similar_destinations: List[str]
+    expected_temperatures: str
+    recommended_activities: List[str]
+    commentary: str
+
+class DestinationRecommendationList(RootModel[List[DestinationRecommendation]]):
+    pass
+
+parser = PydanticOutputParser(pydantic_object=DestinationRecommendationList)
+
+def download_image_bytes(image_url: str) -> Image.Image:
+    """Download image from URL and return raw bytes."""
+    headers = {"User-Agent": "Mozilla/5.0"}
+    response = requests.get(image_url, headers=headers)
+    response.raise_for_status()
+    return Image.open(io.BytesIO(response.content))
+
+# Setup Gemini for multimodal use case
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+model = genai.GenerativeModel("gemini-2.0-flash-exp")
+
+def image_understanding(image_bytes:Image.Image) -> str:
+
+    try:
+
+        prompt = (
+            f"Describe location and climate.\n"
+            f"1. What kind of location or activity this seems to be (e.g., ski resort, beach, hiking trail).\n"
+            f"2. What kind of weather is represented.\n"
+            f"3. Write in a friendly tone."
+        )
+
+        EXAMPLES = [
+            {
+                "img": download_image_bytes("https://upload.wikimedia.org/wikipedia/commons/9/9d/Seychelles_Beach.jpg"),
+                "month": "July",
+                "style": "friendly",
+                "answer": (
+                    "1. A tranquil tropical beach perfect for sun‑lounging and gentle swimming.\n"
+                    "2. Clear skies, bright sun, 28 °C with a light sea breeze.\n"
+                    "3. Try Bora Bora or the Maldives in July.\n"
+                    "4. Expect 27‑30 °C; plan for snorkeling, paddle‑boarding, and sunset cruises.\n"
+                    "5. Friendly tone 🙂: *Pack reef‑safe sunscreen and a good book; paradise awaits!*"
+                ),
+            },
+            {
+                "img": download_image_bytes("https://upload.wikimedia.org/wikipedia/commons/0/03/Panorama_vom_Gornergrat-Zermatt.jpg"),
+                "month": "January",
+                "style": "adventurous",
+                "answer": (
+                    "1. A high‑alpine ski resort with well‑groomed downhill runs.\n"
+                    "2. Crisp winter weather: −5 °C, light powder snow, low humidity.\n"
+                    "3. Consider Whistler (Canada) or St. Anton (Austria) in January.\n"
+                    "4. Temps −10 °C to −2 °C; carve fresh pistes, try night skiing, warm up with après‑ski fondue.\n"
+                    "5. Adventurous tone 🏂: *Strap in, breathe the icy air, and chase that first‑tracks adrenaline!*"
+                ),
+            },
+            ]
+        # Build the content list:  (ex1_img, ex1_answer, ex2_img, ex2_answer, target_img, prompt)
+        content = []
+        for ex in EXAMPLES:
+            content.extend([ex["img"], ex["answer"]])
+        content.extend([image_bytes, prompt])
+
+        response = model.generate_content(content)
+
+        return response.text.strip()
+
+    except Exception as e:
+        return f"❌ Error: {e}"
+
+
+def clean_preferences_and_extract_image(preferences: str):
+    pattern = r'(https?://[^\s]+\.(?:jpg|jpeg|png|webp|gif))'
+    match = re.search(pattern, preferences, re.IGNORECASE)
+    image_url = match.group(1) if match else None
+    cleaned = re.sub(pattern, '', preferences).strip()
+    return cleaned, image_url
+
+def destination_recommender(agent_input: str) -> str:
+    """
+    Uses Gemini 2.0-flash=exp to interpret the climate/activity from an image (local or URL),
+    then recommends similar destinations for that type of environment in a specific month.
+    """
+    try:
+        input_dict = extract_json_from_response(agent_input)
+    except Exception as e:
+        return "Agent Input Error: invalid json as input. call the agent again with valid input", repr(e)
+    
+    required_fields = ["travel_date", "duration", "budget", "preferences"]
+    for f in required_fields:
+        if f not in input_dict:
+            return f" Missing required field: {f}"
+        
+    style = input_dict.get("style", "friendly")
+    month = input_dict.get("travel_date", "April")
+     # Try to extract image from preferences if not already present
+    if "image_url" not in input_dict or not input_dict["image_url"]:
+        cleaned_prefs, image_url = clean_preferences_and_extract_image(input_dict["preferences"])
+        if image_url:
+            input_dict["image_url"] = image_url
+            input_dict["preferences"] = cleaned_prefs
+    try:
+        image_bytes = download_image_bytes(input_dict["image_url"])
+        img_content = image_understanding(image_bytes)
+
+        # Parse flexible travel date
+        try:
+            travel_start_date = date_parser.parse(input_dict["travel_date"], fuzzy=True, default=datetime.now())
+        except Exception as e:
+            return f"Could not parse travel date: {e}"
+
+        today = datetime.today()
+        days_until_trip = (travel_start_date - today).days
+
+        # Build the prompt
+        prompt = (
+            f"The user is planning a trip starting on {travel_start_date.strftime('%B %d, %Y')}, lasting {input_dict['duration']}, "
+            f"with a total budget of {input_dict['budget']}.\n\n"
+            f"The user's preference for climate or activity is based on "
+            f"{'the uploaded image, which suggests: ' + img_content if img_content else 'their written input: ' + input_dict['preferences']}.\n\n"
+            f"Recommend **3 travel destinations cities** that:\n"
+            f"- Match the user's interests and climate\n"
+            f"- Fit within the time and budget\n"
+            f"- Are realistic to visit during that season\n\n"
+            f"For each destination, provide:\n"
+            f"1. Name of the city and its country\n"
+            f"2. Description of activities and vibe\n"
+            f"3. Suggested experience\n"
+            f"4. Temperature range in that month\n"
+            f"5. Why it's a good match\n\n"
+            f"Respond in this JSON format:\n{parser.get_format_instructions()}\n"
+            f"Use a {style} tone."
+        )
+
+
+        response = llm.invoke(prompt)
+        cities = [item.location_names[0] for item in parser.parse(response.content).root]
+        # # Build weather info string
+        # if days_until_trip <= 14:
+        #     weather_info = get_weather(cities, travel_start_date) 
+        #     print("cool")
+        # else:
+        #     month = travel_start_date.strftime("%B")
+        #     weather_info = f"No real-time forecast needed — recommend destinations with average weather for {month}."
+
+        
+        return {"destination": parser.parse(response.content).model_dump()}
+
+    except Exception as e:
+        return f"❌ Error: {e}"
+    
+if __name__ == "__main__":
+    response = '''
+    {
+        "travel_date": "April 22th",
+        "duration": "5 days",
+        "budget": "$1500",
+        "preferences": "Let's go somewhere like this! Here's what I mean: https://upload.wikimedia.org/wikipedia/commons/f/f9/Playa_de_El_Buzo_2_de_mayo_de_2009.jpg",
+    }
+    '''
+
+    # the supervisor has to make sure if it calls this function, 
+    # then we know that the destination value is empty
+    print(destination_recommender(response))
