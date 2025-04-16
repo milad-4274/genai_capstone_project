@@ -20,7 +20,7 @@ if not GOOGLE_API_KEY:
 parser = PydanticOutputParser(pydantic_object=Itinerary)
 
 # Should have its own llm instance 
-llm_itinerary = ChatGoogleGenerativeAI(model="gemini-2.0-flash", google_api_key=GOOGLE_API_KEY, temperature=0.1)
+llm_itinerary = ChatGoogleGenerativeAI(model="gemini-2.0-flash", google_api_key=GOOGLE_API_KEY, temperature=1)
 
 
 
