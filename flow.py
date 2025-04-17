@@ -8,7 +8,13 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langgraph.graph import StateGraph, END
 import os
 from agents import (AccommodationSearchAgent,
-                    agent_activity)
+                    activity_search,
+                    destination_recommender,
+                    generate_itinerary,
+                    review_itinerary,
+                    silly_travel_stylist_structured,
+                    get_transportation,
+                    get_location_visa,)
 from state import TripState
 from dotenv.main import load_dotenv
 import json
@@ -21,32 +27,6 @@ GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
 if not GOOGLE_API_KEY:
     raise ValueError("Please set the GOOGLE_API_KEY environment variable.")
 
-# prompt_v1 = [
-#     ("system", """You are a trip planning supervisor agent. Your role is to manage the overall trip planning process. Give the value named `Current context` follow the instructions to generate personalized itinerary. The overall process include extracting user preferences and information like user current location, destination and desired activities. the user current location is required and if not provided, ask user to complete using `user_input_step` agent, destination and activities and budget are required too unless user wants a totally blind trip. Convert user output to structured context for updating current location destination and budget using `update_information` agent; Call it when some information exist in chat history but not in the context keys. if user input is not okay, ask them. If you have question from user call the `user_input_step` agent and ask follow-up question from user. If user is unsure about destination provide suggestions based on the current location and desired activities.
-#     when the destination is set, if it is abroad, find about visa eligibility using `get_location_visa` agent. then research more about destination and try to generate itinerary and refine it based on user preferences in the context then respond using `action : final_response` instead of calling another agent to finish the process. in follow up questions try to suggest some options based on the context.
-     
-     
-#     by deciding which agent to call next, or when to respond to the user.
-    
-#     Here are the available agents:
-#     - extract_preferences: Extracts the user's travel preferences, interests, and style.
-#     - get_location_visa:  Determines visa requirements.
-#     - research_destination:  Researches a destination and provides information.
-#     - plan_budget:  Provides a budget breakdown for a trip.
-#     - generate_itinerary:  Generates a draft itinerary.
-#     - refine_itinerary: Refines the itinerary based on user feedback.
-#     - final_response:  Provides the final trip plan to the user.
-#     - user_input_step: Asks the user for more input
-#     - update_information: update budget, current location and destination. should be called after getting these information from user to register them.
-
-#     Respond with a JSON object in the following format to call an agent:
-#     - {{ "agent": "agent_name", "input": agent_input }}
-    
-#     If you're satisfied with the refined itinerary output respond in the following format to the user. 
-#     - {{ "action": "final_response", "response": "final version of personalized itinerary" }}
-#     """),
-#     ("human", "Current context: {context}"),]
-# --- Prompts ---
 SUPERVISOR_PROMPT = ChatPromptTemplate.from_messages([
 ("system", """
 You are a *trip planning supervisor agent*. Your role is to orchestrate the end-to-end trip planning process by intelligently coordinating a set of specialized agents.
@@ -77,31 +57,34 @@ The planning flow typically includes:
 The system maintains a `Current context`, which includes:
 - `chat_history`: chat history
 - `user_preferences`: user_preferences
-- `current_location`: current_location
+- `origin`: origin
 - `destination`: destination
-- `visa_eligibility`: visa_eligibility
+- `other`: other
+- `transportation_preferences`: transportation_preferences
+- `start_date`: start_date
+- `duration`: duration
+- `preferences`: preferences
 - `budget`: budget
-- `destination_info`: destination_info
-- `itinerary_draft`: itinerary_draft
-- `personalized_itinerary`: personalized_itinerary
 - `next_node`: next_node
 - `agent_input`: agent_input
 - `response`: response
 - `accommodation`: accommodation
+- `activity_preferences`: activity_preferences
+- `itinerary`: itinerary
+- `accommodation_preferences`: accommodation_preferences
 
 ---
 
 ## 🤖 AGENT INSTRUCTIONS
 
 You have access to the following agents:
-
-- **extract_preferences**: Extracts user's travel style and interests.
-- **get_location_visa**: Checks visa requirements based on nationality and destination.
-- **research_destination**: Gathers info about the destination.
-- **get_accommodation**: will recommend hotels in a city.
-- **plan_budget**: Provides a suggested trip budget breakdown.
+- **AccommodationSearchAgent**: Finds places to stay given a specific city name.
+- **destination_recommender**: Gathers info about the destination based on the preferences of the user input.
 - **generate_itinerary**: Creates a draft itinerary.
-- **refine_itinerary**: Improves the itinerary based on feedback.
+- **review_itinerary**: Improves the itinerary based on feedback.
+- **silly_travel_stylist_structured**: Gives clothing, language and cultural tips about destination.
+- **get_transportation**:
+- **get_location_visa**: Checks visa requirements based on nationality and destination.
 - **final_response**: Sends the final itinerary to the user.
 - **user_input_step**: Asks the user for any needed input.
 - **update_information**: Updates the context with `current_location`, `destination`, and/or `budget`.
@@ -186,18 +169,8 @@ Before the json, tell the reason of your selection in one line.
 ("human", "Current context: {context}")
 ])
 
-
-
-
 llm_supervisor = ChatGoogleGenerativeAI(model="gemini-2.0-flash", google_api_key=GOOGLE_API_KEY, temperature=0)
-llm_preference = ChatGoogleGenerativeAI(model="gemini-2.0-flash", google_api_key=GOOGLE_API_KEY, temperature=1)
-llm_location_visa = ChatGoogleGenerativeAI(model="gemini-2.0-flash", google_api_key=GOOGLE_API_KEY, temperature=0)
-llm_destination = ChatGoogleGenerativeAI(model="gemini-2.0-flash", google_api_key=GOOGLE_API_KEY, temperature=1)
-llm_budget = ChatGoogleGenerativeAI(model="gemini-2.0-flash", google_api_key=GOOGLE_API_KEY, temperature=0.5)
-llm_itinerary = ChatGoogleGenerativeAI(model="gemini-2.0-flash", google_api_key=GOOGLE_API_KEY, temperature=1)
 llm_refinement = ChatGoogleGenerativeAI(model="gemini-2.0-flash", google_api_key=GOOGLE_API_KEY, temperature=0.1)
-llm_user_input = ChatGoogleGenerativeAI(model="gemini-2.0-flash", google_api_key=GOOGLE_API_KEY, temperature=0.5)
-
 # --- Worker Agent Definitions ---
 
 # Supervisor Node
@@ -205,12 +178,7 @@ def supervisor_node(state: TripState):
     """
     This node acts as the supervisor, deciding which agent to call next.
     """
-
     context = str(state)
-    
-    # print("context\n", context)
-    
-    
     chain = SUPERVISOR_PROMPT | llm_supervisor
     result = chain.invoke({"context": context})
     
@@ -224,7 +192,13 @@ def supervisor_node(state: TripState):
                 full_query = state.chat_history[-1]      # last user turn
                 return {"next_node": agent_name, "agent_input": full_query}
             elif agent_name != "get_accommodation":
+                if isinstance(agent_input, str) and agent_input.strip().startswith("{"):
+                    try:
+                        agent_input = json.loads(agent_input.replace("'", '"'))  # handles single quotes
+                    except Exception as e:
+                        print("Agent input parsing failed:", e)
                 return {"next_node": agent_name, "agent_input": agent_input}
+
             else:
                 # Skip accommodation call since it's already done
                 return {"next_node": "supervisor"}  # Reinvoke supervisor or go to another fallback
@@ -251,72 +225,6 @@ def get_user_input(state: TripState):
     chat_history.append(user_input)
     # return {"response": user_input}
     return {"chat_history" : chat_history}
-
-def extract_preferences(state: TripState):
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", "Extract the user's travel preferences, interests, and style from their input."),
-        ("human", "{user_input}"),
-    ])
-    chain = prompt | llm_preference
-    result = chain.invoke({"user_input": state.chat_history})
-    return {"user_preferences": result.content}
-
-def get_location_visa(state: TripState):
-    duration = state.duration if hasattr(state, "duration") else "One week"
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are a helpful assistant with knowledge of Visa requirements by nationality for tourism purposes."),
-        ("human", "For a {duration} trip from {current_location} to {destination} what is visa requirement. give your estimation of time for processing the probable application, the recommeded visa type and the cost of recommended visa "),
-        # ("human", "{user_input}"),
-    ])
-    chain = prompt | llm_location_visa
-    result = chain.invoke({"current_location": state.current_location, "destination": state.destination, "duration" : duration})
-    return {"visa_eligibility": result.content, "current_location": state.current_location}
-
-def research_destination(state: TripState):
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", "Research '{destination}' and provide key information about attractions, local culture, and things to do."),
-        ("human", "Tell me about {destination}."),
-    ])
-    chain = prompt | llm_destination
-    result = chain.invoke({"destination": state.destination})
-    return {"destination_info": result.content}
-
-def plan_budget(state: TripState):
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", "Consider the user's budget '{budget}' and the destination. Provide a rough breakdown of potential costs for a trip to '{destination}'."),
-        ("human", "How can I plan a trip to {destination} with a budget of {budget}?"),
-    ])
-    chain = prompt | llm_budget
-    result = chain.invoke({"destination": state.destination, "budget": state.budget})
-    return {"budget": state.budget}
-
-def generate_itinerary(state: TripState):
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", "Based on the user's preferences '{user_preferences}', information about '{destination_info}', and budget considerations, generate a draft itinerary."),
-        ("human", "Create a potential itinerary."),
-    ])
-    chain = prompt | llm_itinerary
-    result = chain.invoke({
-        "user_preferences": state.user_preferences,
-        "destination_info": state.destination_info,
-        "budget": state.budget
-    })
-    return {"itinerary_draft": result.content}
-
-
-
-def refine_itinerary(state: TripState):
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", "Refine the itinerary based on the user's initial input and preferences to make it more personalized. Only return the Markdown result of the provided itinerary without any further explantion and extra texts."),
-        ("human", "**User Preferences: ** \n{user_input}\n \n **Draft itinerary:** {itinerary_draft}"),
-    ])
-    chain = prompt | llm_refinement
-    itinerary = state.personalized_itinerary if bool(state.personalized_itinerary) else state.itinerary_draft
-    result = chain.invoke({
-        "user_input": state.user_preferences,
-        "itinerary_draft": itinerary
-    })
-    return {"personalized_itinerary": result.content}
 
 
 def update_information(state: TripState):
@@ -364,14 +272,14 @@ graph.add_node("start", lambda state: {"next_node": "supervisor"})  # Start goes
 graph.add_node("supervisor", supervisor_node)  # Add the supervisor node
 graph.add_node("user_input_step", get_user_input)
 graph.add_node("update_information", update_information)
-graph.add_node("extract_preferences", extract_preferences)
+graph.add_node("destination_recommender", destination_recommender)
 graph.add_node("get_location_visa", get_location_visa)
-graph.add_node("research_destination", research_destination)
+graph.add_node("review_itinerary", review_itinerary)
 acc_agent = AccommodationSearchAgent()
 graph.add_node("get_accommodation", acc_agent)
-graph.add_node("plan_budget", plan_budget)
+graph.add_node("silly_travel_stylist_structured", silly_travel_stylist_structured)
 graph.add_node("generate_itinerary", generate_itinerary)
-graph.add_node("refine_itinerary", refine_itinerary)
+graph.add_node("get_transportation", get_transportation)
 graph.add_node("final_response", final_response)
 
 
@@ -382,13 +290,13 @@ graph.add_conditional_edges("supervisor", get_next_node)
 
 graph.add_edge("user_input_step", "supervisor") # Go back to supervisor after user input
 graph.add_edge("update_information","supervisor")
-graph.add_edge("extract_preferences","supervisor")
+graph.add_edge("destination_recommender","supervisor")
 graph.add_edge("get_location_visa","supervisor")
-graph.add_edge("research_destination","supervisor")
+graph.add_edge("get_transportation","supervisor")
 graph.add_edge("get_accommodation","supervisor")
-graph.add_edge("plan_budget","supervisor")
+graph.add_edge("silly_travel_stylist_structured","supervisor")
 graph.add_edge("generate_itinerary","supervisor")
-graph.add_edge("refine_itinerary","supervisor")
+graph.add_edge("review_itinerary","supervisor")
 graph.add_edge("final_response","supervisor")
 # Entrypoint of the graph
 graph.set_entry_point("start")

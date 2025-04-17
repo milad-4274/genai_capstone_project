@@ -1,23 +1,21 @@
 import os
 import re
 import requests
-from typing import List
-from pydantic import BaseModel, RootModel
 from langchain.output_parsers import PydanticOutputParser
 from langchain_google_genai import ChatGoogleGenerativeAI
 import google.generativeai as genai
-from utils_agent import extract_json_from_response
-# from tools import get_weather
+from agents.utils_agent import extract_json_from_response
+from agents.tools import get_weather
+from agents.data_models import DestinationRecommendationList
 from PIL import Image
 import io
 from dateutil import parser as date_parser
-from datetime import datetime, timedelta
+from datetime import datetime
 from dotenv.main import load_dotenv
 
 load_dotenv()
 
 # --- Configuration ---
-OWM_API_KEY = os.getenv("OWM_API_KEY")
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
 if not GOOGLE_API_KEY:
     raise ValueError("Please set the GOOGLE_API_KEY environment variable.")
@@ -28,17 +26,6 @@ llm = ChatGoogleGenerativeAI(
     google_api_key=GOOGLE_API_KEY,
     temperature=0.1,
 )
-class DestinationRecommendation(BaseModel):
-    location_type: str
-    location_names: List[str]
-    weather_description: str
-    similar_destinations: List[str]
-    expected_temperatures: str
-    recommended_activities: List[str]
-    commentary: str
-
-class DestinationRecommendationList(RootModel[List[DestinationRecommendation]]):
-    pass
 
 parser = PydanticOutputParser(pydantic_object=DestinationRecommendationList)
 
@@ -101,7 +88,7 @@ def image_understanding(image_bytes:Image.Image) -> str:
         return response.text.strip()
 
     except Exception as e:
-        return f"❌ Error: {e}"
+        return f"Error: {e}"
 
 
 def clean_preferences_and_extract_image(preferences: str):
@@ -111,7 +98,7 @@ def clean_preferences_and_extract_image(preferences: str):
     cleaned = re.sub(pattern, '', preferences).strip()
     return cleaned, image_url
 
-def destination_recommender(agent_input: str) -> str:
+def destination_recommender(agent_input: str) -> dict:
     """
     Uses Gemini 2.0-flash=exp to interpret the climate/activity from an image (local or URL),
     then recommends similar destinations for that type of environment in a specific month.
@@ -121,19 +108,19 @@ def destination_recommender(agent_input: str) -> str:
     except Exception as e:
         return "Agent Input Error: invalid json as input. call the agent again with valid input", repr(e)
     
-    required_fields = ["travel_date", "duration", "budget", "preferences"]
+    required_fields = ["travel_date", "duration", "budget", "accommodation_preferences"]
     for f in required_fields:
         if f not in input_dict:
             return f" Missing required field: {f}"
         
     style = input_dict.get("style", "friendly")
-    month = input_dict.get("travel_date", "April")
+
      # Try to extract image from preferences if not already present
     if "image_url" not in input_dict or not input_dict["image_url"]:
-        cleaned_prefs, image_url = clean_preferences_and_extract_image(input_dict["preferences"])
+        cleaned_prefs, image_url = clean_preferences_and_extract_image(input_dict["accommodation_preferences"])
         if image_url:
             input_dict["image_url"] = image_url
-            input_dict["preferences"] = cleaned_prefs
+            input_dict["accommodation_preferences"] = cleaned_prefs
     try:
         image_bytes = download_image_bytes(input_dict["image_url"])
         img_content = image_understanding(image_bytes)
@@ -152,7 +139,7 @@ def destination_recommender(agent_input: str) -> str:
             f"The user is planning a trip starting on {travel_start_date.strftime('%B %d, %Y')}, lasting {input_dict['duration']}, "
             f"with a total budget of {input_dict['budget']}.\n\n"
             f"The user's preference for climate or activity is based on "
-            f"{'the uploaded image, which suggests: ' + img_content if img_content else 'their written input: ' + input_dict['preferences']}.\n\n"
+            f"{'the uploaded image, which suggests: ' + img_content if img_content else 'their written input: ' + input_dict['accommodation_preferences']}.\n\n"
             f"Recommend **3 travel destinations cities** that:\n"
             f"- Match the user's interests and climate\n"
             f"- Fit within the time and budget\n"
@@ -161,25 +148,54 @@ def destination_recommender(agent_input: str) -> str:
             f"1. Name of the city and its country\n"
             f"2. Description of activities and vibe\n"
             f"3. Suggested experience\n"
-            f"4. Temperature range in that month\n"
-            f"5. Why it's a good match\n\n"
-            f"Respond in this JSON format:\n{parser.get_format_instructions()}\n"
-            f"Use a {style} tone."
+            f"4. Why it's a good match\n\n"
+            f"Make sure that you Do NOT provide any information on the tempreture of those cities you recommend."
+            f"Return the result in this JSON format:\n{parser.get_format_instructions()}\n"
+            f"Respond in a {style} tone."
         )
 
 
-        response = llm.invoke(prompt)
-        cities = [item.location_names[0] for item in parser.parse(response.content).root]
-        # # Build weather info string
-        # if days_until_trip <= 14:
-        #     weather_info = get_weather(cities, travel_start_date) 
-        #     print("cool")
-        # else:
-        #     month = travel_start_date.strftime("%B")
-        #     weather_info = f"No real-time forecast needed — recommend destinations with average weather for {month}."
+        temp_response = llm.invoke(prompt)
+        cities = [item.location_names[0] for item in parser.parse(temp_response.content).root]
+        # Build weather info string
+        weather_infos = []  # List of weather summaries (one per city)
 
-        
-        return {"destination": parser.parse(response.content).model_dump()}
+        for city in cities:
+            if days_until_trip <= 14:
+                weather_data = get_weather(city, travel_start_date)
+                if weather_data:
+                    min_c = weather_data.get("min_temp")
+                    max_c = weather_data.get("max_temp")
+                    summary = weather_data.get("weather_summary", "pleasant weather")
+                    weather_summary = (
+                        f"{city} on {travel_start_date}: {summary} with highs around {max_c}°C and lows around {min_c}°C."
+                    )
+                else:
+                    weather_summary = (
+                        f"{city} on {travel_start_date}: Forecast unavailable. Please check local weather updates closer to your trip."
+                    )
+            else:
+                weather_summary = (
+                    f"{city} on {travel_start_date}: Estimate the likely weather based on historical climate for that time of year."
+                )
+
+            weather_infos.append(weather_summary)
+
+        # Join them into a single prompt
+        joined_weather = "\n".join(weather_infos)
+
+        final_prompt = (
+            f"🌍 Trip Summary Request 🌞\n\n"
+            f"📅 Trip starts on: {travel_start_date.strftime('%B %d, %Y')}\n"
+            f"🗺️ Recommended Destinations:\n\n{temp_response.content}\n\n"
+            f"🌤️ Weather Forecast specific for the duration of your stay:\n\n{joined_weather}\n\n"
+            "✈️ Now, write a combined travel-friendly summary incorporating both destination descriptions and their weather conditions.\n"
+            f"Return the result in this JSON format:\n{parser.get_format_instructions()}\n"
+            f"Respond in a {style} tone."
+        )
+
+        response = llm.invoke(final_prompt)
+        return {"agent": "destination_recommender", "input": {"destination": parser.parse(response.content).model_dump()}}
 
     except Exception as e:
         return f"❌ Error: {e}"
@@ -190,10 +206,10 @@ if __name__ == "__main__":
         "travel_date": "April 22th",
         "duration": "5 days",
         "budget": "$1500",
-        "preferences": "Let's go somewhere like this! Here's what I mean: https://upload.wikimedia.org/wikipedia/commons/f/f9/Playa_de_El_Buzo_2_de_mayo_de_2009.jpg",
+        "accommodation_preferences": "Let's go somewhere like this! Here's what I mean: https://upload.wikimedia.org/wikipedia/commons/f/f9/Playa_de_El_Buzo_2_de_mayo_de_2009.jpg",
     }
     '''
 
     # the supervisor has to make sure if it calls this function, 
-    # then we know that the destination value is empty
+    # only when we know that the destination value is empty
     print(destination_recommender(response))

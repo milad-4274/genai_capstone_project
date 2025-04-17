@@ -1,12 +1,12 @@
 import os
 from dotenv.main import load_dotenv
 from langchain_core.prompts import ChatPromptTemplate
-from utils_agent import extract_json_from_response
+from agents.utils_agent import extract_json_from_response
 from google.genai import types
 from google import genai
 from google.api_core import retry
 
-from data_models import Transportation, TransportationList
+from agents.data_models import Transportation, TransportationList
 from langchain.output_parsers import PydanticOutputParser
 from langsmith import traceable, Client
 from typing import List

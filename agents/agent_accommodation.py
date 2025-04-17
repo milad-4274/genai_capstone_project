@@ -7,7 +7,7 @@ from typing import Dict, Any, List, Optional
 from langchain_google_genai import ChatGoogleGenerativeAI
 from chromadb import Documents, EmbeddingFunction, Embeddings
 from google.genai import types
-from utils_agent import extract_json_from_response
+from agents.utils_agent import extract_json_from_response
 from geopy.geocoders import Nominatim
 from dotenv.main import load_dotenv
 load_dotenv()
