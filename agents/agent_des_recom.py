@@ -3,10 +3,10 @@ import re
 import requests
 from langchain.output_parsers import PydanticOutputParser
 from langchain_google_genai import ChatGoogleGenerativeAI
-import google as genai
-from utils_agent import extract_json_from_response
-from tools import get_weather
-from data_models import DestinationRecommendationList
+import google.generativeai as genai
+from agents.utils_agent import extract_json_from_response
+from agents.tools import get_weather
+from agents.data_models import DestinationRecommendationList
 from PIL import Image
 import io
 from dateutil import parser as date_parser
@@ -98,7 +98,7 @@ def clean_preferences_and_extract_image(preferences: str):
     cleaned = re.sub(pattern, '', preferences).strip()
     return cleaned, image_url
 
-def destination_recommender(agent_input: str) -> str:
+def destination_recommender(agent_input: str) -> dict:
     """
     Uses Gemini 2.0-flash=exp to interpret the climate/activity from an image (local or URL),
     then recommends similar destinations for that type of environment in a specific month.
@@ -108,7 +108,7 @@ def destination_recommender(agent_input: str) -> str:
     except Exception as e:
         return "Agent Input Error: invalid json as input. call the agent again with valid input", repr(e)
     
-    required_fields = ["travel_date", "duration", "budget", "preferences"]
+    required_fields = ["travel_date", "duration", "budget", "accommodation_preferences"]
     for f in required_fields:
         if f not in input_dict:
             return f" Missing required field: {f}"
@@ -117,10 +117,10 @@ def destination_recommender(agent_input: str) -> str:
 
      # Try to extract image from preferences if not already present
     if "image_url" not in input_dict or not input_dict["image_url"]:
-        cleaned_prefs, image_url = clean_preferences_and_extract_image(input_dict["preferences"])
+        cleaned_prefs, image_url = clean_preferences_and_extract_image(input_dict["accommodation_preferences"])
         if image_url:
             input_dict["image_url"] = image_url
-            input_dict["preferences"] = cleaned_prefs
+            input_dict["accommodation_preferences"] = cleaned_prefs
     try:
         image_bytes = download_image_bytes(input_dict["image_url"])
         img_content = image_understanding(image_bytes)
@@ -139,7 +139,7 @@ def destination_recommender(agent_input: str) -> str:
             f"The user is planning a trip starting on {travel_start_date.strftime('%B %d, %Y')}, lasting {input_dict['duration']}, "
             f"with a total budget of {input_dict['budget']}.\n\n"
             f"The user's preference for climate or activity is based on "
-            f"{'the uploaded image, which suggests: ' + img_content if img_content else 'their written input: ' + input_dict['preferences']}.\n\n"
+            f"{'the uploaded image, which suggests: ' + img_content if img_content else 'their written input: ' + input_dict['accommodation_preferences']}.\n\n"
             f"Recommend **3 travel destinations cities** that:\n"
             f"- Match the user's interests and climate\n"
             f"- Fit within the time and budget\n"
@@ -195,7 +195,7 @@ def destination_recommender(agent_input: str) -> str:
         )
 
         response = llm.invoke(final_prompt)
-        return {"destination": parser.parse(response.content).model_dump()}
+        return {"agent": "destination_recommender", "input": {"destination": parser.parse(response.content).model_dump()}}
 
     except Exception as e:
         return f"❌ Error: {e}"
@@ -206,7 +206,7 @@ if __name__ == "__main__":
         "travel_date": "April 22th",
         "duration": "5 days",
         "budget": "$1500",
-        "preferences": "Let's go somewhere like this! Here's what I mean: https://upload.wikimedia.org/wikipedia/commons/f/f9/Playa_de_El_Buzo_2_de_mayo_de_2009.jpg",
+        "accommodation_preferences": "Let's go somewhere like this! Here's what I mean: https://upload.wikimedia.org/wikipedia/commons/f/f9/Playa_de_El_Buzo_2_de_mayo_de_2009.jpg",
     }
     '''
 

@@ -2,10 +2,10 @@ import os
 from dotenv.main import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
-from utils_agent import extract_json_from_response
+from agents.utils_agent import extract_json_from_response
 from langchain.schema.output_parser import StrOutputParser
 from langchain.output_parsers import PydanticOutputParser
-from data_models import Activity, DailyActivity, Itinerary
+from agents.data_models import Activity, DailyActivity, Itinerary
 
 
 load_dotenv()
@@ -90,7 +90,7 @@ if __name__ == "__main__":
   "destination": "London",
   "travel_date": "April 23th",
   "duration": "5 Days",
-  "preferences": "I love Arsenal, I enjoy going and watching historic sites I love doing physical activity I love to see local culture I love to see some of Iranian parts of cities or stores",
+  "activity_preferences": "I love Arsenal, I enjoy going and watching historic sites I love doing physical activity I love to see local culture I love to see some of Iranian parts of cities or stores",
   "budget" : "1500 $",
 }''')
     import json
