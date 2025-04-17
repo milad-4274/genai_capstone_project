@@ -1,7 +1,7 @@
 
 from pydantic import BaseModel, Field, RootModel
 from typing import List, Optional
-
+from  pydantic import BaseModel as PydanticBaseModel
 
 # Define the structured output schema
 class Activity(BaseModel):
@@ -41,15 +41,24 @@ class Transportation(BaseModel):
 class TransportationList(BaseModel):
     items: List[Transportation]
 
-
-class SillyTravelBriefing(BaseModel):
+class SillyTravelBriefing(PydanticBaseModel):
+    """Structured output for the silly travel briefing."""
     destination: str 
-    weather: str 
-    outfit: str 
+    weather_summary: str 
+    clothing_tip: str 
+    cultural_tip: str 
     language_tip: str 
     safety_tip: str 
+    activity_suggestion: str 
     closing_remark: str 
 
+class TravelPreferences(PydanticBaseModel):
+    """Input model for travel details."""
+    destination: str 
+    travel_date: str 
+    duration: str 
+    preferences: str 
+    budget: Optional[str] 
 class DestinationRecommendation(BaseModel):
     location_type: str
     location_names: list[str]
