@@ -20,7 +20,7 @@ llm_visa = ChatGoogleGenerativeAI(model="gemini-2.0-flash", google_api_key=GOOGL
 
 
 # Node as a function that return the task response (detinstiaon information in this example)
-def get_location_visa(agent_input : str):
+def get_location_visa(agent_input: dict):
     """
     Checks visa requirements based on nationality and destination.
     agent input should be valid json with `origin` and `destination` keys. if there is additional information, "other" key can be provided too.
@@ -59,21 +59,15 @@ Any brief, useful tips like passport validity or return ticket requirements
 Please keep it short and clear. Thanks!
 """
     
-    try:
-        input_dict = extract_json_from_response(agent_input)
-    except:
-        return "invalid json as input. call the agent again with valid input"
+    if "other" in agent_input:
+        VISA_HUMAN_PROMPT = VISA_HUMAN_PROMPT + f"\nOther information: {agent_input['other']} "
     
-    if "other" in input_dict:
-        VISA_HUMAN_PROMPT = VISA_HUMAN_PROMPT + f"\nOther information: {input_dict['other']} "
-    
-    print(VISA_HUMAN_PROMPT)
     prompt = ChatPromptTemplate.from_messages([
         ("system", VISA_SYSTEM_PROMPT),
         ("human", VISA_HUMAN_PROMPT),
     ])
     chain = prompt | llm_visa
-    result = chain.invoke({"origin": input_dict["origin"], "destination": input_dict["destination"]})
+    result = chain.invoke({"origin": agent_input["origin"], "destination": agent_input["destination"]})
     return result.content
 
 if __name__ == "__main__":

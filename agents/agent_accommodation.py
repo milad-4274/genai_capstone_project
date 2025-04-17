@@ -137,15 +137,14 @@ class AccommodationSearchAgent:
     def __call__(self, query: Dict) -> Dict[str, Any]:
         if not query:
             return {"response": "I need a search query."}
-        query_json = extract_json_from_response(query)
-        df = self._filter_country(self._df_reviews(), query_json)
+        df = self._filter_country(self._df_reviews(), query)
         if df.empty:
             prompt = f"""
         You are a helpful travel assistant. A user is looking for hotels in **{query["destination"]}**.
 
         They specifically care about: **{query["user preference"]}**
 
-        Return a short, friendly list of 3–5 hotels in **{query["destination"]}** that best match the user's preference. 
+        Return a short, friendly list of 1 hotel in **{query["destination"]}** that best match the user's preference. 
         For each hotel, include:
         - Hotel name
         - Neighborhood or address
@@ -158,8 +157,8 @@ class AccommodationSearchAgent:
         else:
             top = self._aggregate_hotels(df)
             self._index_top_hotels(top)
-            hits = self._similarity_search(query_json)
-            return {"accommodation": self._format_response(query_json, hits)}
+            hits = self._similarity_search(query)
+            return {"accommodation": self._format_response(query, hits)}
 
 if __name__=="__main__":
     agent_inst = AccommodationSearchAgent()

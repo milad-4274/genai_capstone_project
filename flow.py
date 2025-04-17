@@ -38,9 +38,9 @@ if not GOOGLE_API_KEY:
     raise ValueError("Please set the GOOGLE_API_KEY environment variable.")
 
 agent_instructions = ""
-for i, agent in enumerate([AccommodationSearchAgent,activity_search, destination_recommender,generate_itinerary, review_itinerary,silly_travel_stylist_structured,get_transportation,get_location_visa]):
-    print("Agent name: ", agent.__name__ , "Agent doc:",  agent.__doc__)
-    print("_"*10)
+# for i, agent in enumerate([AccommodationSearchAgent,activity_search, destination_recommender,generate_itinerary, review_itinerary,silly_travel_stylist_structured,get_transportation,get_location_visa]):
+#     print("Agent name: ", agent.__name__ , "Agent doc:",  agent.__doc__)
+#     print("_"*10)
 
 
 SUPERVISOR_PROMPT = ChatPromptTemplate.from_messages([
@@ -67,76 +67,35 @@ accommodation, duration, start_date
 
 📦 AGENTS & INPUT FORMATS:
 
-AccommodationSearchAgent:
-{
-    "destination": string,
-    "user preference": string
-}
+get_accommodation:
+{{{{"destination": string, "user preference": string}}}}
 
 activity_search:
-{
-    "activity_preferences": string,
-    "num_results": int,
-    "how_many": int,
-    "style": "friendly" | "formal" | "bullet"
-}
+{{{{"activity_preferences": string, "num_results": int, "how_many": int, "style": "friendly" | "formal" | "bullet"}}}}
 
 destination_recommender:
-{
-    "travel_date": string,
-    "duration": string,
-    "budget": string,
-    "accommodation_preferences": string (can include image URL)
-}
+{{{{"travel_date": string, "duration": string, "budget": string, "accommodation_preferences": string}}}}
 
 generate_itinerary:
-{
-    "destination": string,
-    "travel_date": string,
-    "duration": string,
-    "activity_preferences": string,
-    "budget": string
-}
+{{{{"destination": string, "travel_date": string, "duration": string, "activity_preferences": string, "budget": string}}}}
 
 review_itinerary:
-{
-    "destination": string,
-    "travel_date": string,
-    "duration": string,
-    "activity_preferences": string,
-    "budget": string,
-    "itinerary": <itinerary_draft>
-}
+{{{{"destination": string, "travel_date": string, "duration": string, "activity_preferences": string, "budget": string, "itinerary": <itinerary_draft>}}}}
 
 silly_travel_stylist_structured:
-{
-    "destination": string,
-    "travel_date": string,
-    "duration": string,
-    "preferences": string,
-    "budget": string
-}
+{{{{"destination": string, "travel_date": string, "duration": string, "preferences": string, "budget": string}}}}
 
 get_transportation:
-{
-    "origin": string,
-    "destination": string,
-    "transportation_preferences": string,
-    "start_date": string,
-    "duration": string
-}
+{{{{"origin": string, "destination": string, "transportation_preferences": string, "start_date": string, "duration": string}}}}
 
 get_location_visa:
-{
-    "origin": string,
-    "destination": string,
-    "other": string (optional, e.g. nationality info)
-}
+{{{{"origin": string, "destination": string, "other": string}}}}
 
 get_user_input:
 Use this agent to gather missing info, confirm outputs, or deliver the final result.
 
 context_summarizer:
+
 Use this to update the shared context after every interaction.
 
 ---
@@ -158,7 +117,7 @@ Use this to update the shared context after every interaction.
 4. 🛏️ **Search for Accommodation**
    - Only if `accommodation` is NOT already in context
    - And if `destination` and user accommodation preferences are available:
-     → Call `AccommodationSearchAgent`.
+     → Call `get_accommodation`.
 
 5. 🚄 **Plan Transportation**
    - If `origin`, `destination`, `start_date`, and `duration` are present:
@@ -192,10 +151,11 @@ Use this to update the shared context after every interaction.
 - Only call an agent when all of its required inputs are available in `context`.
 - If something is missing, use `get_user_input` to ask for it.
 - Never generate travel content — delegate all logic to appropriate agents.
+- Whenever you want to call an agent, make sure you return a json with key {{"agent": name of the agent,"input": {{input of the agent}}}} without any extra information
 """),
 ("human", "Current context: {context}")
 ])
-
+# 
 llm_supervisor = ChatGoogleGenerativeAI(model="gemini-2.0-flash", google_api_key=GOOGLE_API_KEY, temperature=0)
 llm_context = ChatGoogleGenerativeAI(model="gemini-2.0-flash", google_api_key=GOOGLE_API_KEY, temperature=0)
 # --- Worker Agent Definitions ---
@@ -208,7 +168,9 @@ def supervisor_node(state: TripState):
     context = str(state)
     chain = SUPERVISOR_PROMPT | llm_supervisor
     result = chain.invoke({"context": context})
-    
+    print("result is : ", result.content)
+    print("state is ", state)
+
     try:
         response = extract_json_from_response(result.content)
         print("response is ", response )
@@ -244,54 +206,60 @@ def supervisor_node(state: TripState):
 
 
 def get_user_input(state: TripState):
+    print(" GET USER INPUT CALLED.")
     """Prompts the user for more information."""
     chat_history = state.get_chat_history()
     chat_history.append(state.agent_input)
     user_input = input("Model --- " + state.agent_input + "\nUser :\n")
     print("---")
     chat_history.append(user_input)
-    # return {"response": user_input}
-    return {"chat_history" : chat_history}
+    context_summarizer(state, user_input)
+    return {"chat_history" : chat_history, "response": user_input}
 
 
-def context_summarizer(text_input):
-    
-    prompt = """
-    based on the following text, update the provided context:
-    input text:
-    {text_input}
-    
-    old context:
-    {context} 
-    """
+def context_summarizer(state: TripState, text_input: str):
     # context summarizer
+    """
+    Updates the context (TripState) with new values extracted from text input using the LLM.
+    Should be called after user input or agent output.
+    """
     print("CONTEXT SUMMARIZER CALLED")
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are extraction system like regex for extracting information from texts. the Respond with a JSON object containing the following keys as information (if any): \n{{'destination : ... , budget: ..., current_location : ...'}}"),
-        ("human", "Extract the information from the following user query if any: \nUser Query:\n {query}"),
+    context_str = str(state)
+    context_summary_prompt = ChatPromptTemplate.from_messages([
+        ("system", """
+            You are a context optimizer. Your job is to update the travel planning context using newly received input.
+            
+
+            Return only those keys that are found or updated. Do NOT return unrelated or unchanged keys.
+
+            Format:
+            ```json
+            {{"field1": "updated value", "field2": "another value"}}
+            ```
+        """),
+        ("human", """
+        Context so far:
+        {context}
+
+        New input:
+        {text_input}
+        """),
     ])
-    chain = prompt | llm_refinement
-    result = chain.invoke({
-        "query": state.chat_history[-2:],
-    })
+
     
+    chain = context_summary_prompt | llm_context
+    result = chain.invoke({"context": context_str, "text_input": text_input})
+
     try:
-        response = extract_json_from_response(result.content)
-        valid_response = {}
-        for key, value in response.items():
+        updates = extract_json_from_response(result.content)
+        print("\nContext updates:", updates)
+        for key, value in updates.items():
             if hasattr(state, key):
-                if bool(value):
-                    valid_response[key] = value
-                    print(f"state {key} updated")
-            else:
-                print(f"Warning: update information returned unknown key {key}")
-    except json.JSONDecodeError:
-        print(f"Error decoding JSON.  LLM Response: {result.content}")
-        return {"next_node": "final_response", "response": "I encountered an error. Please try again."}  # Or some error state
-    except ValueError as e:
-        print(f"ValueError: {e}")
-        return {"next_node": "final_response", "response": "I encountered an error processing the request."}
-    return valid_response
+                setattr(state, key, value)
+        return state
+    except Exception as e:
+        print(f"❌ Failed to summarize context: {e}\nRaw output: {result.content}")
+        return {"next_node": "get_user_input", "agent_input": "Something went wrong updating the context."}
 
 
 def final_response(state: TripState):
@@ -302,22 +270,85 @@ def final_response(state: TripState):
 def get_next_node(state: TripState):
     return state.next_node
 
+
+def summarize_context_after_call(agent_func):
+    def wrapper(state: TripState):
+        print(f"⏳ Calling wrapped agent: {agent_func.__name__}")
+        
+        # Step 1: Call the original agent with state.agent_input
+        output = agent_func(state.agent_input)
+
+        # Step 2: Update the context based on agent output
+        context_summarizer(state, json.dumps(output))  # Update in-place
+
+        # Step 3: Optionally store response in state
+        state.response = output
+
+        return state
+    return wrapper
+
+@summarize_context_after_call
+def agent_destination_wrapper(input_data):
+    print("destination reccommender is called.")
+    return destination_recommender(input_data)
+
+@summarize_context_after_call
+def get_location_visa_wrapper(input_data):
+    var = get_location_visa(input_data)
+    return var
+
+@summarize_context_after_call
+def review_itinerary_wrapper(input_data):
+    print("review itinerary is called.")
+    return review_itinerary(input_data)
+
+@summarize_context_after_call
+def acc_agent_wrapper(input_data):
+    print("destination reccommender is called.")
+    acc_agent = AccommodationSearchAgent()
+    return acc_agent(input_data)
+
+@summarize_context_after_call
+def silly_travel_stylist_structured_wrapper(input_data):
+    print("I am called silly_travel_stylist_structured_wrapper")
+    return silly_travel_stylist_structured(input_data)
+
+@summarize_context_after_call
+def generate_itinerary_wrapper(input_data):
+    print("generate itinerary is called.")
+    return generate_itinerary(input_data)
+
+@summarize_context_after_call
+def get_transportation_wrapper(input_data):
+    print("get transportation is called.")
+    return get_transportation(input_data)
+
+@summarize_context_after_call
+def final_response_wrapper(input_data):
+    print("fina response is called.")
+    return final_response(input_data)
+
+def start_node(state:TripState):
+    state = context_summarizer(state, state.agent_input)
+    print("state is ", state)
+    return state
+
+
 # Create the graph
 graph = StateGraph(TripState)
 
-graph.add_node("start", lambda state: {"next_node": "supervisor"})  # Start goes to supervisor
+graph.add_node("start", start_node)  # Start goes to supervisor
 graph.add_node("supervisor", supervisor_node)  # Add the supervisor node
-graph.add_node("user_input_step", get_user_input)
-graph.add_node("update_information", update_information)
-graph.add_node("destination_recommender", destination_recommender)
-graph.add_node("get_location_visa", get_location_visa)
-graph.add_node("review_itinerary", review_itinerary)
-acc_agent = AccommodationSearchAgent()
-graph.add_node("get_accommodation", acc_agent)
-graph.add_node("silly_travel_stylist_structured", silly_travel_stylist_structured)
-graph.add_node("generate_itinerary", generate_itinerary)
-graph.add_node("get_transportation", get_transportation)
-graph.add_node("final_response", final_response)
+graph.add_node("get_user_input", get_user_input)
+# graph.add_node("context_summarizer", context_summarizer)
+graph.add_node("destination_recommender", agent_destination_wrapper)
+graph.add_node("get_location_visa", get_location_visa_wrapper)
+graph.add_node("review_itinerary", review_itinerary_wrapper)
+graph.add_node("get_accommodation", acc_agent_wrapper)
+graph.add_node("silly_travel_stylist_structured", silly_travel_stylist_structured_wrapper)
+graph.add_node("generate_itinerary", generate_itinerary_wrapper)
+graph.add_node("get_transportation", get_transportation_wrapper)
+graph.add_node("final_response", final_response_wrapper)
 
 
 # --- Edges ---
@@ -325,8 +356,8 @@ graph.add_edge("start", "supervisor")
 
 graph.add_conditional_edges("supervisor", get_next_node)
 
-graph.add_edge("user_input_step", "supervisor") # Go back to supervisor after user input
-graph.add_edge("update_information","supervisor")
+graph.add_edge("get_user_input", "supervisor") # Go back to supervisor after user input
+# graph.add_edge("context_summarizer","supervisor")
 graph.add_edge("destination_recommender","supervisor")
 graph.add_edge("get_location_visa","supervisor")
 graph.add_edge("get_transportation","supervisor")
