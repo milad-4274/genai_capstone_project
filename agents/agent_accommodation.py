@@ -7,7 +7,7 @@ from typing import Dict, Any, List, Optional
 from langchain_google_genai import ChatGoogleGenerativeAI
 from chromadb import Documents, EmbeddingFunction, Embeddings
 from google.genai import types
-from agents.utils_agent import extract_json_from_response
+from .utils_agent import extract_json_from_response
 from geopy.geocoders import Nominatim
 from dotenv.main import load_dotenv
 load_dotenv()
@@ -43,6 +43,9 @@ class GeminiEmbeddingFunction(EmbeddingFunction):
         )
         return [e.values for e in response.embeddings]
 class AccommodationSearchAgent:
+    """
+    Sample docstring
+    """
     def __init__(self, csv_path: str = "Hotel_Reviews.csv"):
         self.csv_path = csv_path
         self.embed_fn = GeminiEmbeddingFunction()

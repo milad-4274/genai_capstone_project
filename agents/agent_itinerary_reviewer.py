@@ -2,10 +2,10 @@ import os
 from dotenv.main import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
-from agents.utils_agent import extract_json_from_response
+from .utils_agent import extract_json_from_response
 from langchain.schema.output_parser import StrOutputParser
 from langchain.output_parsers import PydanticOutputParser
-from agents.data_models import Activity, DailyActivity, Itinerary
+from .data_models import Activity, DailyActivity, Itinerary
 
 
 load_dotenv()

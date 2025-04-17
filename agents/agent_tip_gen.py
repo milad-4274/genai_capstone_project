@@ -3,8 +3,8 @@ import re
 import json
 from typing import List, Dict, Optional 
 from dotenv import load_dotenv
-from agents.tools import get_weather
-from agents.data_models import SillyTravelBriefing, TravelPreferences
+from .tools import get_weather
+from .data_models import SillyTravelBriefing, TravelPreferences
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain.tools import tool
@@ -195,8 +195,10 @@ def silly_travel_stylist_structured(agent_input: str) -> Dict:
         input_dict = json.loads(agent_input)
         prefs = TravelPreferences(**input_dict)
     except json.JSONDecodeError as e:
+        print(input_dict)
         return {"error": f"Invalid JSON input. Please provide valid JSON. Error: {e}"}
     except Exception as e: # Catches Pydantic validation errors too
+        print(input_dict)
         return {"error": f"Could not parse input data. Check fields. Error: {e}"}
 
     if isinstance(prefs.travel_date, str):
@@ -277,7 +279,7 @@ if __name__ == "__main__":
       "destination": "London",
       "travel_date": "April 18th 2025",
       "duration": "5 Days",
-      "activity_preferences": "I love Arsenal, I enjoy going and watching historic sites I love doing physical activity I love to see local culture I love to see some of Iranian parts of cities or stores",
+      "preferences": "I love Arsenal, I enjoy going and watching historic sites I love doing physical activity I love to see local culture I love to see some of Iranian parts of cities or stores",
       "budget" : "1500 $"
     }'''
     briefing_output = silly_travel_stylist_structured(travel_request_json)

@@ -2,7 +2,7 @@ import os
 from dotenv.main import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
-from agents.utils_agent import extract_json_from_response
+from .utils_agent import extract_json_from_response
 
 
 load_dotenv()

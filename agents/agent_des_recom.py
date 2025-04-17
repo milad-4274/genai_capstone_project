@@ -3,10 +3,11 @@ import re
 import requests
 from langchain.output_parsers import PydanticOutputParser
 from langchain_google_genai import ChatGoogleGenerativeAI
-import google.generativeai as genai
-from agents.utils_agent import extract_json_from_response
-from agents.tools import get_weather
-from agents.data_models import DestinationRecommendationList
+# import google.generativeai as 
+from google import genai
+from .utils_agent import extract_json_from_response
+from .tools import get_weather
+from .data_models import DestinationRecommendationList
 from PIL import Image
 import io
 from dateutil import parser as date_parser
@@ -37,8 +38,9 @@ def download_image_bytes(image_url: str) -> Image.Image:
     return Image.open(io.BytesIO(response.content))
 
 # Setup Gemini for multimodal use case
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-model = genai.GenerativeModel("gemini-2.0-flash-exp")
+# genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+client = genai.Client(api_key=GOOGLE_API_KEY)
+# model = genai.GenerativeModel("gemini-2.0-flash-exp")
 
 def image_understanding(image_bytes:Image.Image) -> str:
 
@@ -83,7 +85,11 @@ def image_understanding(image_bytes:Image.Image) -> str:
             content.extend([ex["img"], ex["answer"]])
         content.extend([image_bytes, prompt])
 
-        response = model.generate_content(content)
+        # response = model.generate_content(content)
+        response = client.models.generate_content(
+            model='gemini-2.0-flash-exp',
+            contents=content
+        )
 
         return response.text.strip()
 
