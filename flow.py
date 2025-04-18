@@ -17,6 +17,8 @@ from utils import extract_json_from_response
 
 load_dotenv()
 
+SAVE_GRAPH_IMAGE = False
+
 # --- Configuration ---
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
 if not GOOGLE_API_KEY:
@@ -52,26 +54,36 @@ accommodation, duration, start_date, trip_tips
 📦 AGENTS & INPUT FORMATS:
 
 get_accommodation:
-{{{{"destination": string, "user preference": string}}}}
+{{"destination": string, "user preference": string}}
 
 activity_search:
-{{{{"search_query": "a google search query that includes preferences of the user based on destination"}}}}
+{{"search_query": "a google search query that includes preferences of the user based on destination"}}
 
 destination_recommender:
-{{{{"travel_date": string, "duration": string, "budget": string, "accommodation_preferences": string}}}}
+{{"travel_date": string, "duration": string, "budget": string, "accommodation_preferences": string}}
 
 generate_itinerary:
-{{{{"destination": string, "travel_date": string, "duration": string, "budget": string, "accommodation": string, "destination_info": string, "transportation": string,
-    "trip_tips": string, "visa_info": string, "activity_preferences": "use both user preferences and destination_activities", "budget": string}}}}
+{{
+  "destination": string,
+  "travel_date": string,
+  "duration": string,
+  "budget": string,
+  "accommodation": string,
+  "destination_info": string,
+  "transportation": string,
+  "trip_tips": string,
+  "visa_info": string,
+  "activity_preferences": "use both user preferences and destination_activities"
+}}
 
 silly_travel_stylist_structured:
-{{{{"destination": string, "travel_date": string, "duration": string, "preferences": string, "budget": string}}}}
+{{"destination": string, "travel_date": string, "duration": string, "preferences": string, "budget": string}}
 
 get_transportation:
-{{{{"origin": string, "destination": string, "transportation_preferences": string, "start_date": string, "duration": string}}}}
+{{"origin": string, "destination": string, "transportation_preferences": string, "start_date": string, "duration": string}}
 
 get_location_visa:
-{{{{"origin": string, "destination": string, "other": string}}}}
+{{"origin": string, "destination": string, "other": string}}
 
 get_user_input:
 Use this agent to gather missing info, confirm outputs, or deliver the final result.
@@ -79,6 +91,7 @@ Use this agent to gather missing info, confirm outputs, or deliver the final res
 ---
 
 🎯 PLANNING FLOW:
+
 
 1. 📝 **Collect Initial Preferences**
    - Ensure these exist in context: `user_preferences`, `current_location`, `budget`, `start_date`, `duration`
@@ -102,23 +115,27 @@ Use this agent to gather missing info, confirm outputs, or deliver the final res
      → Call `get_transportation`.
 
 6. 🧭 **Search for Activities**
-   - If `duration` and `destination are present:
-     → Call `activity_search`. 
+   - If `duration` and `destination` are present:
+     → Call `activity_search`.
 
 7. 🎉 **Generate Fun Summary**
    - Only if `trip_tips` is NOT already in context
-   - And if `duration` , `destination`, `travel_date`, `preferences`, and `budget` are present:
-    - call `silly_travel_stylist_structured` to generate a personalized style summary.
+   - And if `duration`, `destination`, `travel_date`, `preferences`, and `budget` are present:
+     → Call `silly_travel_stylist_structured`.
 
 8. 🧳 **Generate Itinerary**
-   - Only if `itinerary_draft` is NOT already in context
+   - Only if `itinerary_draft` is NOT already in the current context
    - And if `destination`, `travel_date`, `duration`, `activity_preferences`,
      `budget`, `accommodation`, `destination_info`, `transportation`,
      `trip_tips`, `visa_info` are available:
-   - → Call `generate_itinerary`.
- 
+     → Call `generate_itinerary`.
+
 9. ✅ **Send Final Output to User**
-   - Deliver the reviewed itinerary using `get_user_input`
+   - If `itinerary_draft` is now available in the context instead of calling agent, do `action` to send the user the output
+     → Return it using:
+     ```json
+     {{"action": "final_response", "response": the context itinerary_draft as json}}
+     ```
 
 ---
 
@@ -127,7 +144,10 @@ Use this agent to gather missing info, confirm outputs, or deliver the final res
 - Only call an agent when all of its required inputs are available in `context`.
 - If something is missing, use `get_user_input` to ask for it.
 - Never generate travel content — delegate all logic to appropriate agents.
-- Whenever you want to call an agent, make sure you return a json with key {{"agent": name of the agent,"input": {{input of the agent}}}} without any extra information
+- Whenever you want to call an agent, return a JSON with key:
+  ```json
+  {{"why": "the reason you called this agent very briefly", "agent": "<name_of_the_agent>", "input": {{<agent_input>}} }}
+
 """),
 ("human", "Current context: {context}")
 ])
@@ -165,10 +185,10 @@ def supervisor_node(state: TripState):
             # else:
             #     # Skip accommodation call since it's already done
             #     return {"next_node": "supervisor"}  # Reinvoke supervisor or go to another fallback
-        # elif "action" in response:
-        #     print("Final Result: \n", response["response"])
-        #     return {"next_node": END}
-        #     # return {"next_node": "final_response", "response": response["response"]}
+        elif "action" in response:
+            print("Final Result: \n", response["response"])
+            return {"next_node": END}
+            # return {"next_node": "final_response", "response": response["response"]}
         else:
             raise ValueError(f"Invalid supervisor response: {response}")
     except json.JSONDecodeError:
@@ -244,8 +264,8 @@ def context_summarizer(state: TripState, text_input: str):
         return {"next_node": "get_user_input", "agent_input": "Something went wrong updating the context."}
 
 
-def final_response(state: TripState):
-    return {"response": f"Here's your personalized trip program for {state.destination}:\n\n{state.personalized_itinerary}\n\nVisa Information: {state.visa_eligibility}\nBudget Considerations: {state.budget}"}
+# def final_response(state: TripState):
+#     return {"response": f"Here's your personalized trip program for {state.destination}:\n\n{state.personalized_itinerary}\n\nVisa Information: {state.visa_eligibility}\nBudget Considerations: {state.budget}"}
 
 # --- Router Nodes ---
 
@@ -280,7 +300,7 @@ def get_location_visa_wrapper(input_data):
 
 @summarize_context_after_call
 def acc_agent_wrapper(input_data):
-    print("destination reccommender is called.")
+    print("Accomodation agent is called.")
     acc_agent = AccommodationSearchAgent()
     return acc_agent(input_data)
 
@@ -301,10 +321,10 @@ def get_transportation_wrapper(input_data):
     print("get transportation is called.")
     return get_transportation(input_data)
 
-@summarize_context_after_call
-def final_response_wrapper(input_data):
-    print("final response is called.")
-    return final_response(input_data)
+# @summarize_context_after_call
+# def final_response_wrapper(input_data):
+#     print("final response is called.")
+#     return final_response(input_data)
 
 def activity_search_wrapper(state:TripState):
     print("activity search is called.")
@@ -329,7 +349,7 @@ graph.add_node("get_accommodation", acc_agent_wrapper)
 graph.add_node("silly_travel_stylist_structured", silly_travel_stylist_structured_wrapper)
 graph.add_node("generate_itinerary", generate_itinerary_wrapper)
 graph.add_node("get_transportation", get_transportation_wrapper)
-graph.add_node("final_response", final_response_wrapper)
+# graph.add_node("final_response", final_response_wrapper)
 
 
 # --- Edges ---
@@ -345,17 +365,18 @@ graph.add_edge("get_transportation","supervisor")
 graph.add_edge("get_accommodation","supervisor")
 graph.add_edge("silly_travel_stylist_structured","supervisor")
 graph.add_edge("generate_itinerary","supervisor")
-graph.add_edge("final_response","supervisor")
+# graph.add_edge("final_response","supervisor")
 # Entrypoint of the graph
 graph.set_entry_point("start")
 # Compile the graph
 chain = graph.compile()
 
-# from io import BytesIO
-# from PIL import Image
-# stream = BytesIO(chain.get_graph().draw_mermaid_png())
-# image = Image.open(stream).convert("RGBA")
-# image.save("flow_design.png")
+if SAVE_GRAPH_IMAGE:
+    from io import BytesIO
+    from PIL import Image
+    stream = BytesIO(chain.get_graph().draw_mermaid_png())
+    image = Image.open(stream).convert("RGBA")
+    image.save("flow_design.png")
 
 # --- Example Usage ---
 if __name__ == "__main__":
