@@ -6,6 +6,7 @@ from  pydantic import BaseModel as PydanticBaseModel
 # Define the structured output schema
 class Activity(BaseModel):
     title: str
+    description: str
     activity_type: str
     time_of_day: str
     estimated_start_time: str
