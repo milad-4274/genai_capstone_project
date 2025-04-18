@@ -1,21 +1,7 @@
-from typing import Dict, List, Tuple, Annotated
-from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
-from langchain_core.outputs import ChatGenerationChunk, ChatResult
-from langchain_core.runnables import RunnableConfig, RunnablePassthrough
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.tools import BaseTool
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.prompts import ChatPromptTemplate
 from langgraph.graph import StateGraph, END
 import os
-# from agents import (AccommodationSearchAgent,
-#                     activity_search,
-#                     destination_recommender,
-#                     generate_itinerary,
-#                     review_itinerary,
-#                     silly_travel_stylist_structured,
-#                     get_transportation,
-#                     get_location_visa,)
-
 from agents.agent_accommodation import AccommodationSearchAgent
 from agents.agent_activity import activity_search
 from agents.agent_des_recom import destination_recommender
@@ -24,7 +10,6 @@ from agents.agent_itinerary_reviewer import review_itinerary
 from agents.agent_tip_gen import silly_travel_stylist_structured
 from agents.agent_transportation import get_transportation
 from agents.agent_visa import get_location_visa
-
 from state import TripState
 from dotenv.main import load_dotenv
 import json
@@ -37,7 +22,7 @@ GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
 if not GOOGLE_API_KEY:
     raise ValueError("Please set the GOOGLE_API_KEY environment variable.")
 
-agent_instructions = ""
+# agent_instructions = ""
 # for i, agent in enumerate([AccommodationSearchAgent,activity_search, destination_recommender,generate_itinerary, review_itinerary,silly_travel_stylist_structured,get_transportation,get_location_visa]):
 #     print("Agent name: ", agent.__name__ , "Agent doc:",  agent.__doc__)
 #     print("_"*10)
@@ -55,13 +40,12 @@ You do NOT generate travel content yourself — you only orchestrate agent calls
 🧰 ACCESS:
 - `context`: the shared state (see variables below)
 - all specialist agents (see formats below)
-- `context_summarizer`: must be called after each user or agent response
 - `get_user_input`: to collect or confirm information, or deliver results
 
 📦 CONTEXT VARIABLES:
 transportation, chat_history, user_preferences, current_location, budget,
 destination, visa_info, itinerary_draft, personalized_itinerary,
-accommodation, duration, start_date
+accommodation, duration, start_date, trip_tips
 
 ---
 
@@ -71,16 +55,14 @@ get_accommodation:
 {{{{"destination": string, "user preference": string}}}}
 
 activity_search:
-{{{{"activity_preferences": string, "num_results": int, "how_many": int, "style": "friendly" | "formal" | "bullet"}}}}
+{{{{"search_query": "a google search query that includes preferences of the user based on destination"}}}}
 
 destination_recommender:
 {{{{"travel_date": string, "duration": string, "budget": string, "accommodation_preferences": string}}}}
 
 generate_itinerary:
-{{{{"destination": string, "travel_date": string, "duration": string, "activity_preferences": string, "budget": string}}}}
-
-review_itinerary:
-{{{{"destination": string, "travel_date": string, "duration": string, "activity_preferences": string, "budget": string, "itinerary": <itinerary_draft>}}}}
+{{{{"destination": string, "travel_date": string, "duration": string, "budget": string, "accommodation": string, "destination_info": string, "transportation": string,
+    "trip_tips": string, "visa_info": string, "activity_preferences": "use both user preferences and destination_activities", "budget": string}}}}
 
 silly_travel_stylist_structured:
 {{{{"destination": string, "travel_date": string, "duration": string, "preferences": string, "budget": string}}}}
@@ -93,10 +75,6 @@ get_location_visa:
 
 get_user_input:
 Use this agent to gather missing info, confirm outputs, or deliver the final result.
-
-context_summarizer:
-
-Use this to update the shared context after every interaction.
 
 ---
 
@@ -124,30 +102,28 @@ Use this to update the shared context after every interaction.
      → Call `get_transportation`.
 
 6. 🧭 **Search for Activities**
-   - When `activity_preferences` are known:
-     → Call `activity_search`.
+   - If `duration` and `destination are present:
+     → Call `activity_search`. 
 
-7. 🎉 **Generate Fun Summary (Optional)**
-   - Optionally call `silly_travel_stylist_structured` to generate a personalized style summary.
+7. 🎉 **Generate Fun Summary**
+   - Only if `trip_tips` is NOT already in context
+   - And if `duration` , `destination`, `travel_date`, `preferences`, and `budget` are present:
+    - call `silly_travel_stylist_structured` to generate a personalized style summary.
 
 8. 🧳 **Generate Itinerary**
-   - Only when these are available:
-     `destination`, `travel_date`, `duration`, `activity_preferences`, `budget`
+   - Only if `itinerary_draft` is NOT already in context
+   - And if `destination`, `travel_date`, `duration`, `activity_preferences`,
+     `budget`, `accommodation`, `destination_info`, `transportation`,
+     `trip_tips`, `visa_info` are available:
    - → Call `generate_itinerary`.
-
-9. 🔍 **Review Itinerary**
-   - Once `itinerary_draft` is available:
-     → Call `review_itinerary`.
-
-10. ✅ **Send Final Output to User**
+ 
+9. ✅ **Send Final Output to User**
    - Deliver the reviewed itinerary using `get_user_input`
-   - Optionally ask for feedback or final confirmation.
 
 ---
 
 ⚠️ RULES:
 
-- Always call `context_summarizer` after each user input or agent result.
 - Only call an agent when all of its required inputs are available in `context`.
 - If something is missing, use `get_user_input` to ask for it.
 - Never generate travel content — delegate all logic to appropriate agents.
@@ -168,8 +144,6 @@ def supervisor_node(state: TripState):
     context = str(state)
     chain = SUPERVISOR_PROMPT | llm_supervisor
     result = chain.invoke({"context": context})
-    print("result is : ", result.content)
-    print("state is ", state)
 
     try:
         response = extract_json_from_response(result.content)
@@ -211,10 +185,11 @@ def get_user_input(state: TripState):
     chat_history = state.get_chat_history()
     chat_history.append(state.agent_input)
     user_input = input("Model --- " + state.agent_input + "\nUser :\n")
-    print("---")
     chat_history.append(user_input)
-    context_summarizer(state, user_input)
-    return {"chat_history" : chat_history, "response": user_input}
+    new_context = context_summarizer(state, "\n".join(chat_history[-2:]))
+    new_context.chat_history= chat_history
+    new_context.response= user_input
+    return new_context
 
 
 def context_summarizer(state: TripState, text_input: str):
@@ -227,8 +202,16 @@ def context_summarizer(state: TripState, text_input: str):
     context_str = str(state)
     context_summary_prompt = ChatPromptTemplate.from_messages([
         ("system", """
-            You are a context optimizer. Your job is to update the travel planning context using newly received input.
-            
+            You are a context summarizer. Your job is to update the travel planning context using newly received input.
+            Look for these keys:
+            user_preferences
+            current_location
+            budget
+            destination
+            visa_info
+            personalized_itinerary
+            duration
+            start_date
 
             Return only those keys that are found or updated. Do NOT return unrelated or unchanged keys.
 
@@ -245,7 +228,6 @@ def context_summarizer(state: TripState, text_input: str):
         {text_input}
         """),
     ])
-
     
     chain = context_summary_prompt | llm_context
     result = chain.invoke({"context": context_str, "text_input": text_input})
@@ -294,13 +276,7 @@ def agent_destination_wrapper(input_data):
 
 @summarize_context_after_call
 def get_location_visa_wrapper(input_data):
-    var = get_location_visa(input_data)
-    return var
-
-@summarize_context_after_call
-def review_itinerary_wrapper(input_data):
-    print("review itinerary is called.")
-    return review_itinerary(input_data)
+    return get_location_visa(input_data)
 
 @summarize_context_after_call
 def acc_agent_wrapper(input_data):
@@ -308,15 +284,17 @@ def acc_agent_wrapper(input_data):
     acc_agent = AccommodationSearchAgent()
     return acc_agent(input_data)
 
-@summarize_context_after_call
-def silly_travel_stylist_structured_wrapper(input_data):
+def silly_travel_stylist_structured_wrapper(state):
     print("I am called silly_travel_stylist_structured_wrapper")
-    return silly_travel_stylist_structured(input_data)
+    return {"trip_tips": silly_travel_stylist_structured(state.agent_input)}
 
-@summarize_context_after_call
-def generate_itinerary_wrapper(input_data):
+def generate_itinerary_wrapper(state):
     print("generate itinerary is called.")
-    return generate_itinerary(input_data)
+    result = generate_itinerary(state.agent_input)
+    
+    # store in state to signal the supervisor it's been done
+    state.itinerary_draft = result
+    return {"itinerary_draft": result}
 
 @summarize_context_after_call
 def get_transportation_wrapper(input_data):
@@ -325,11 +303,15 @@ def get_transportation_wrapper(input_data):
 
 @summarize_context_after_call
 def final_response_wrapper(input_data):
-    print("fina response is called.")
+    print("final response is called.")
     return final_response(input_data)
 
+def activity_search_wrapper(state:TripState):
+    print("activity search is called.")
+    return {"destination_activity": activity_search(state.agent_input)}
+
 def start_node(state:TripState):
-    state = context_summarizer(state, state.agent_input)
+    state = context_summarizer(state, state.chat_history[0])
     print("state is ", state)
     return state
 
@@ -340,10 +322,9 @@ graph = StateGraph(TripState)
 graph.add_node("start", start_node)  # Start goes to supervisor
 graph.add_node("supervisor", supervisor_node)  # Add the supervisor node
 graph.add_node("get_user_input", get_user_input)
-# graph.add_node("context_summarizer", context_summarizer)
+graph.add_node("activity_search", activity_search_wrapper)
 graph.add_node("destination_recommender", agent_destination_wrapper)
 graph.add_node("get_location_visa", get_location_visa_wrapper)
-graph.add_node("review_itinerary", review_itinerary_wrapper)
 graph.add_node("get_accommodation", acc_agent_wrapper)
 graph.add_node("silly_travel_stylist_structured", silly_travel_stylist_structured_wrapper)
 graph.add_node("generate_itinerary", generate_itinerary_wrapper)
@@ -357,21 +338,19 @@ graph.add_edge("start", "supervisor")
 graph.add_conditional_edges("supervisor", get_next_node)
 
 graph.add_edge("get_user_input", "supervisor") # Go back to supervisor after user input
-# graph.add_edge("context_summarizer","supervisor")
+graph.add_edge("activity_search","supervisor")
 graph.add_edge("destination_recommender","supervisor")
 graph.add_edge("get_location_visa","supervisor")
 graph.add_edge("get_transportation","supervisor")
 graph.add_edge("get_accommodation","supervisor")
 graph.add_edge("silly_travel_stylist_structured","supervisor")
 graph.add_edge("generate_itinerary","supervisor")
-graph.add_edge("review_itinerary","supervisor")
 graph.add_edge("final_response","supervisor")
 # Entrypoint of the graph
 graph.set_entry_point("start")
-
-
 # Compile the graph
 chain = graph.compile()
+
 # from io import BytesIO
 # from PIL import Image
 # stream = BytesIO(chain.get_graph().draw_mermaid_png())
@@ -391,14 +370,14 @@ if __name__ == "__main__":
     # print("\nResult 2:", result2) # Will likely ask for a destination
 
     # Example 3: Initial input with destination but missing budget
-    inputs3 = {"chat_history": "Plan a trip to Vienna, Austria. I live in berlin and my budget is 2988"}
-    result3 = chain.invoke(inputs3)
-    print("\nResult 3:", result3) # Will likely ask for a budget
+    # inputs3 = {"chat_history": "Plan a trip to Vienna, Austria. I live in berlin and my budget is 2988"}
+    # result3 = chain.invoke(inputs3)
+    # print("\nResult 3:", result3) # Will likely ask for a budget
 
     # Example 4: Full information provided
-    # inputs4 = {"chat_history": "Plan a 7-day adventure trip to Bali for someone traveling from Seville with a budget of $2000. They enjoy hiking and beaches."}
-    # result4 = chain.invoke(inputs4)
-    # print("\nResult 4:", result4)
+    inputs4 = {"chat_history": "Plan a 7-day adventure trip to Bali for someone traveling from Seville with a budget of $2000. They enjoy hiking and beaches. The trip should start on April 19th 2025."}
+    result4 = chain.invoke(inputs4)
+    print("\nResult 4:", result4)
     
     
     

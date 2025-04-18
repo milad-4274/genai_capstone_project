@@ -17,13 +17,7 @@ if not GOOGLE_API_KEY:
 
 google_search_llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash")
 
-def activity_search(
-    query: str,
-    num_results: int = 5,      
-    how_many: int = 5,            
-    style: str = "friendly",    
-    **kwargs,
-) -> str:
+def activity_search(agent_input: dict) -> str:
     """
     Search Google (Programmable Search Engine) and return a **summarised list**
     of the best activities/attractions for the user based on a given location.
@@ -38,14 +32,14 @@ def activity_search(
         raise RuntimeError(
             "Set GOOGLE_SEARCH_API_KEY and GOOGLE_CSE_ID env vars first."
         )
-
+    
     # Google Search API ───────────────────────────
     url = "https://www.googleapis.com/customsearch/v1"
     params = {
         "key": GOOGLE_SEARCH_KEY,
         "cx":  GOOGLE_CSE_ID,
-        "q":   query,
-        "num": min(num_results, 5),
+        "q":   agent_input["search_query"],
+        "num": 5,
     }
 
     try:
@@ -64,17 +58,14 @@ def activity_search(
 
     prompt = (
         f"You are a travel expert.\n"
-        f"Pick the top {how_many} activities someone should do based on the "
-        f"Google search results below and present them in a {style} style. "
+        f"Pick the top 5 activities someone should do based on the "
+        f"Google search results below and present them in a friendly style. "
         "Give each activity a one‑sentence description.\n\n"
         f"{json.dumps(compact, ensure_ascii=False, indent=2)}"
     )
     
-    # print("search summary", compact)
-    # print("items", items[0])
-
-
     # summerization with LLM ───────────────────────────────────
     summary = google_search_llm.invoke(prompt).content
     # Return as a dictionary with a tag (or using your message format) so that the router knows it is from tool.
-    return {"content": summary, "from": "tool"}
+    return summary
+

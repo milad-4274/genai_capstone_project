@@ -11,6 +11,7 @@ from langchain.tools import tool
 from datetime import datetime, timedelta 
 from langchain_community.utilities import GoogleSearchAPIWrapper
 from dateutil import parser as date_parser
+from langchain.output_parsers import PydanticOutputParser
 load_dotenv()
 
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
@@ -20,6 +21,9 @@ if not GOOGLE_API_KEY:
 
 google_llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", google_api_key=GOOGLE_API_KEY)
 Google_Search = GoogleSearchAPIWrapper(google_api_key=GOOGLE_API_KEY)
+
+# Create parser
+parser_brief = PydanticOutputParser(pydantic_object=SillyTravelBriefing)
 
 def parse_duration(duration_str: str) -> int:
     """Parses duration strings like '5 days', '1 week' into number of days."""
@@ -186,19 +190,18 @@ def get_safety_context(destination: str) -> str:
     return get_tool_search_results(query, "Safety tips")
 
 
-def silly_travel_stylist_structured(agent_input: str) -> Dict:
+def silly_travel_stylist_structured(agent_input: dict) -> Dict:
     """
     Takes travel preferences as JSON, calls tools to gather context,
     and uses an LLM to generate a structured SillyTravelBriefing.
     """
     try:
-        input_dict = json.loads(agent_input)
-        prefs = TravelPreferences(**input_dict)
+        prefs = TravelPreferences(**agent_input)
     except json.JSONDecodeError as e:
-        print(input_dict)
+        print(agent_input)
         return {"error": f"Invalid JSON input. Please provide valid JSON. Error: {e}"}
     except Exception as e: # Catches Pydantic validation errors too
-        print(input_dict)
+        print(agent_input)
         return {"error": f"Could not parse input data. Check fields. Error: {e}"}
 
     if isinstance(prefs.travel_date, str):
@@ -207,34 +210,34 @@ def silly_travel_stylist_structured(agent_input: str) -> Dict:
     else:
         start_date = prefs.travel_date
 
-    duration_days = int(re.search(r'\d+', prefs.duration).group())
+    duration_days = int(re.search(r'\d+', agent_input["duration"]).group())
     end_date = start_date + timedelta(days=duration_days)
     ten_days_from_now = datetime.now() + timedelta(days=10)
 
     # 1. Gather Context from Tools
     if end_date <= ten_days_from_now:
         weather_context = get_multi_day_weather_and_clothing_context(
-            prefs.destination,
+            agent_input["destination"],
             start_date,
-            prefs.duration
+            agent_input["duration"]
         )
     else:
         prompt = (
-        f"I'm planning a trip to {input_dict['destination']} in {input_dict['travel_date']}."
+        f"I'm planning a trip to {agent_input['destination']} in {agent_input['travel_date']}."
         f"Can you give me tips on what kind of clothes to pack based on the typical weather?"
         )
         weather_context = google_llm.invoke(prompt).content.strip()
-    cultural_context = get_cultural_context(prefs.destination, prefs.preferences)
-    language_context = get_language_context(prefs.destination)
-    safety_context = get_safety_context(prefs.destination)
+    cultural_context = get_cultural_context(agent_input["destination"], agent_input["preferences"])
+    language_context = get_language_context(agent_input["destination"])
+    safety_context = get_safety_context(agent_input["destination"])
 
     # 2. Prepare Input for LLM
     combined_context = f"""
-    Travel Destination: {prefs.destination}
-    Travel Date: {prefs.travel_date}
-    Trip Duration: {prefs.duration}
-    Traveler Preferences: {prefs.preferences}
-    Budget: {prefs.budget or 'Not specified'}
+    Travel Destination: {agent_input["destination"]}
+    Travel Date: {agent_input["travel_date"]}
+    Trip Duration: {agent_input["duration"]}
+    Traveler Preferences: {agent_input["preferences"]}
+    Budget: {agent_input["budget"] or 'Not specified'}
 
     Gathered Information:
     Weather/Clothing Context: {weather_context}
@@ -263,9 +266,8 @@ def silly_travel_stylist_structured(agent_input: str) -> Dict:
 
     # 5. Invoke Chain and Get Structured Output
     try:
-        response: SillyTravelBriefing = chain.invoke({"context": combined_context})
-        # Return as a dictionary
-        return response
+        response = chain.invoke({"context": combined_context})
+        return str(response.model_dump())
 
     except Exception as e:
         # Fallback or error reporting

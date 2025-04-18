@@ -158,7 +158,7 @@ class AccommodationSearchAgent:
             top = self._aggregate_hotels(df)
             self._index_top_hotels(top)
             hits = self._similarity_search(query)
-            return {"accommodation": self._format_response(query, hits)}
+            return {"response": self._format_response(query, hits)}
 
 if __name__=="__main__":
     agent_inst = AccommodationSearchAgent()

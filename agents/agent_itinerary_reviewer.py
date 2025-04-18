@@ -3,10 +3,8 @@ from dotenv.main import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from .utils_agent import extract_json_from_response
-from langchain.schema.output_parser import StrOutputParser
 from langchain.output_parsers import PydanticOutputParser
-from .data_models import Activity, DailyActivity, Itinerary
-
+from .data_models import Itinerary
 
 load_dotenv()
 
@@ -15,15 +13,11 @@ GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
 if not GOOGLE_API_KEY:
     raise ValueError("Please set the GOOGLE_API_KEY environment variable.")
 
-
 # Create parser
 parser = PydanticOutputParser(pydantic_object=Itinerary)
 
 # Should have its own llm instance 
 llm_itinerary_reviewer = ChatGoogleGenerativeAI(model="gemini-2.0-flash", google_api_key=GOOGLE_API_KEY, temperature=0.1)
-
-
-
 
 # Node as a function that return the task response (detinstiaon information in this example)
 def review_itinerary(agent_input : str):

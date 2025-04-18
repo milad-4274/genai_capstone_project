@@ -20,6 +20,7 @@ class TripState:
     transportation : str = None
     next_node: str = None # Added for supervisor
     agent_input: str = None # Added for supervisor
+    response: str = None
     
     def __init__(self, chat_history: str, **kwargs):
         self.chat_history = [chat_history]
@@ -38,7 +39,7 @@ class TripState:
         self.transportation = kwargs.get("transportation")
         self.next_node = kwargs.get("next_node")
         self.agent_input = kwargs.get("agent_input")
-        # self.response = kwargs.get("response").
+        self.response = kwargs.get("response")
         
     def get_chat_history(self):
         # print("Appending to Chat history", response)
@@ -63,6 +64,7 @@ class TripState:
     transportation : {self.transportation}
     next_node : {self.next_node}
     agent_input : {self.agent_input}
+    response: {self.response}
     """
     
     def __str__(self):
@@ -83,4 +85,5 @@ class TripState:
     transportation : {self.transportation}
     next_node : {self.next_node}
     agent_input : {self.agent_input}
+    response: {self.response}
     """

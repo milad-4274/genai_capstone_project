@@ -68,12 +68,6 @@ here are my preferences about transportation:
 please find the best ways for me.
 """.strip()
     
-    try:
-        input_dict = extract_json_from_response(agent_input)
-    except:
-        return "invalid json as input. call the agent again with valid input"
-    
-    
     prompt = ChatPromptTemplate.from_messages([
         ("system", TRANSPORTATION_SYSTEM_PROMPT),
         ("human", TRANSPORTATION_HUMAN_PROMPT),
@@ -81,7 +75,7 @@ please find the best ways for me.
     
     formatted_prompt = prompt.format_messages(
         format_instructions=parser.get_format_instructions(),
-        **input_dict
+        **agent_input
     )
     
     # Convert the formatted prompt to a string
