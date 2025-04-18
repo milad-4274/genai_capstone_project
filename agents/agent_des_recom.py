@@ -3,11 +3,10 @@ import re
 import requests
 from langchain.output_parsers import PydanticOutputParser
 from langchain_google_genai import ChatGoogleGenerativeAI
-# import google.generativeai as 
 from google import genai
-from .utils_agent import extract_json_from_response
-from .tools import get_weather
-from .data_models import DestinationRecommendationList
+from utils_agent import extract_json_from_response
+from tools import get_weather
+from data_models import DestinationRecommendationList
 from PIL import Image
 import io
 from dateutil import parser as date_parser
@@ -37,8 +36,7 @@ def download_image_bytes(image_url: str) -> Image.Image:
     response.raise_for_status()
     return Image.open(io.BytesIO(response.content))
 
-# Setup Gemini for multimodal use case
-# genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+
 client = genai.Client(api_key=GOOGLE_API_KEY)
 # model = genai.GenerativeModel("gemini-2.0-flash-exp")
 
@@ -47,17 +45,16 @@ def image_understanding(image_bytes:Image.Image) -> str:
     try:
 
         prompt = (
-            f"Describe location and climate.\n"
+            f"Describe location and climate of the uploaded image similar to the provided examples.\n"
             f"1. What kind of location or activity this seems to be (e.g., ski resort, beach, hiking trail).\n"
             f"2. What kind of weather is represented.\n"
             f"3. Write in a friendly tone."
+            f"\n\nExamples:\n"
         )
 
         EXAMPLES = [
             {
                 "img": download_image_bytes("https://upload.wikimedia.org/wikipedia/commons/9/9d/Seychelles_Beach.jpg"),
-                "month": "July",
-                "style": "friendly",
                 "answer": (
                     "1. A tranquil tropical beach perfect for sun‑lounging and gentle swimming.\n"
                     "2. Clear skies, bright sun, 28 °C with a light sea breeze.\n"
@@ -68,8 +65,6 @@ def image_understanding(image_bytes:Image.Image) -> str:
             },
             {
                 "img": download_image_bytes("https://upload.wikimedia.org/wikipedia/commons/0/03/Panorama_vom_Gornergrat-Zermatt.jpg"),
-                "month": "January",
-                "style": "adventurous",
                 "answer": (
                     "1. A high‑alpine ski resort with well‑groomed downhill runs.\n"
                     "2. Crisp winter weather: −5 °C, light powder snow, low humidity.\n"
@@ -201,7 +196,7 @@ def destination_recommender(agent_input: str) -> dict:
         )
 
         response = llm.invoke(final_prompt)
-        return {"agent": "destination_recommender", "input": {"destination": parser.parse(response.content).model_dump()}}
+        return  parser.parse(response.content).model_dump()
 
     except Exception as e:
         return f"❌ Error: {e}"
