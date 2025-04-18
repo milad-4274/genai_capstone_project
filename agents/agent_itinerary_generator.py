@@ -3,8 +3,10 @@ from dotenv.main import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from .utils_agent import extract_json_from_response
-from langchain.output_parsers import PydanticOutputParser
 from .data_models import Itinerary
+from langchain.output_parsers import PydanticOutputParser
+import json
+
 load_dotenv()
 
 # --- Configuration ---
@@ -80,15 +82,20 @@ Please create a day-by-day itinerary with tips and suggested activities. Make su
     )
     response = llm_itinerary.invoke(formatted_prompt)
     result = parser.parse(response.content)
-    return result.model_dump()
+    return json.dumps(result.model_dump())
 
 if __name__ == "__main__":
     response = generate_itinerary('''{
   "destination": "London",
+  "accommodation" : "I'll take care of it",
+  "trip_tips" : "take umbrella and wear water resistence clothes",
+  "destination_info" : "London is the city with the largest stadiumns in the world",
+  "transportation" : "I'll go there by bus",
   "travel_date": "April 23th",
   "duration": "5 Days",
+  "visa_info" : "no need to visa",
   "activity_preferences": "I love Arsenal, I enjoy going and watching historic sites I love doing physical activity I love to see local culture I love to see some of Iranian parts of cities or stores",
   "budget" : "1500 $",
 }''')
-    import json
+    
     print(json.dumps(response))
