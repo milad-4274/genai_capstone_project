@@ -99,36 +99,32 @@ def clean_preferences_and_extract_image(preferences: str):
     cleaned = re.sub(pattern, '', preferences).strip()
     return cleaned, image_url
 
-def destination_recommender(agent_input: str) -> dict:
+def destination_recommender(agent_input: dict) -> dict:
     """
     Uses Gemini 2.0-flash=exp to interpret the climate/activity from an image (local or URL),
     then recommends similar destinations for that type of environment in a specific month.
     """
-    try:
-        input_dict = extract_json_from_response(agent_input)
-    except Exception as e:
-        return "Agent Input Error: invalid json as input. call the agent again with valid input", repr(e)
-    
+
     required_fields = ["travel_date", "duration", "budget", "accommodation_preferences"]
     for f in required_fields:
-        if f not in input_dict:
+        if f not in agent_input:
             return f" Missing required field: {f}"
         
-    style = input_dict.get("style", "friendly")
+    style = agent_input.get("style", "friendly")
 
      # Try to extract image from preferences if not already present
-    if "image_url" not in input_dict or not input_dict["image_url"]:
-        cleaned_prefs, image_url = clean_preferences_and_extract_image(input_dict["accommodation_preferences"])
+    if "image_url" not in agent_input or not agent_input["image_url"]:
+        cleaned_prefs, image_url = clean_preferences_and_extract_image(agent_input["accommodation_preferences"])
         if image_url:
-            input_dict["image_url"] = image_url
-            input_dict["accommodation_preferences"] = cleaned_prefs
+            agent_input["image_url"] = image_url
+            agent_input["accommodation_preferences"] = cleaned_prefs
     try:
-        image_bytes = download_image_bytes(input_dict["image_url"])
+        image_bytes = download_image_bytes(agent_input["image_url"])
         img_content = image_understanding(image_bytes)
 
         # Parse flexible travel date
         try:
-            travel_start_date = date_parser.parse(input_dict["travel_date"], fuzzy=True, default=datetime.now())
+            travel_start_date = date_parser.parse(agent_input["travel_date"], fuzzy=True, default=datetime.now())
         except Exception as e:
             return f"Could not parse travel date: {e}"
 
@@ -137,10 +133,10 @@ def destination_recommender(agent_input: str) -> dict:
 
         # Build the prompt
         prompt = (
-            f"The user is planning a trip starting on {travel_start_date.strftime('%B %d, %Y')}, lasting {input_dict['duration']}, "
-            f"with a total budget of {input_dict['budget']}.\n\n"
+            f"The user is planning a trip starting on {travel_start_date.strftime('%B %d, %Y')}, lasting {agent_input['duration']}, "
+            f"with a total budget of {agent_input['budget']}.\n\n"
             f"The user's preference for climate or activity is based on "
-            f"{'the uploaded image, which suggests: ' + img_content if img_content else 'their written input: ' + input_dict['accommodation_preferences']}.\n\n"
+            f"{'the uploaded image, which suggests: ' + img_content if img_content else 'their written input: ' + agent_input['accommodation_preferences']}.\n\n"
             f"Recommend **3 travel destinations cities** that:\n"
             f"- Match the user's interests and climate\n"
             f"- Fit within the time and budget\n"
@@ -202,14 +198,12 @@ def destination_recommender(agent_input: str) -> dict:
         return f"❌ Error: {e}"
     
 if __name__ == "__main__":
-    response = '''
-    {
+    response = {
         "travel_date": "April 22th",
         "duration": "5 days",
         "budget": "$1500",
         "accommodation_preferences": "Let's go somewhere like this! Here's what I mean: https://upload.wikimedia.org/wikipedia/commons/f/f9/Playa_de_El_Buzo_2_de_mayo_de_2009.jpg",
     }
-    '''
 
     # the supervisor has to make sure if it calls this function, 
     # only when we know that the destination value is empty
