@@ -22,6 +22,10 @@ class DailyActivity(BaseModel):
 class Itinerary(BaseModel):
     assumptions: List[str]
     general_tips: List[str]
+    accomodation: str
+    accomodation_budget: str
+    transportation: str
+    transportation_budget: str
     daily_activities: List[DailyActivity]
 
 

@@ -7,9 +7,10 @@ from typing import Dict, Any, List, Optional
 from langchain_google_genai import ChatGoogleGenerativeAI
 from chromadb import Documents, EmbeddingFunction, Embeddings
 from google.genai import types
-from .utils_agent import extract_json_from_response
 from geopy.geocoders import Nominatim
 from dotenv.main import load_dotenv
+from langsmith import traceable, Client
+
 load_dotenv()
 
 # --- Configuration ---
@@ -19,6 +20,8 @@ if not GOOGLE_API_KEY:
 
 
 client = genai.Client(api_key=GOOGLE_API_KEY)
+
+langsmith_client = Client()
 
 
 # Define a helper to retry when per-minute quota is reached.
@@ -42,6 +45,8 @@ class GeminiEmbeddingFunction(EmbeddingFunction):
             ),
         )
         return [e.values for e in response.embeddings]
+    
+    
 class AccommodationSearchAgent:
     """
     Sample docstring
@@ -134,6 +139,7 @@ class AccommodationSearchAgent:
             print("Summarization fallback:", e)
             return text
 
+    @traceable(name="Accomodation Recommender")
     def __call__(self, query: Dict) -> Dict[str, Any]:
         if not query:
             return {"response": "I need a search query."}

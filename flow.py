@@ -60,12 +60,12 @@ activity_search:
 {{"search_query": "a google search query that includes preferences of the user based on destination"}}
 
 destination_recommender:
-{{"travel_date": string, "duration": string, "budget": string, "accommodation_preferences": string}}
+{{"travel_date": "string in yy-mm-dd format", "duration": string, "budget": string, "accommodation_preferences": string}}
 
 generate_itinerary:
 {{
   "destination": string,
-  "travel_date": string,
+  "travel_date": "string in yy-mm-dd format",
   "duration": string,
   "budget": string,
   "accommodation": string,
@@ -77,7 +77,7 @@ generate_itinerary:
 }}
 
 silly_travel_stylist_structured:
-{{"destination": string, "travel_date": string, "duration": string, "preferences": string, "budget": string}}
+{{"destination": string, "travel_date": "string in yy-mm-dd format", "duration": string, "preferences": string, "budget": string}}
 
 get_transportation:
 {{"origin": string, "destination": string, "transportation_preferences": string, "start_date": string, "duration": string}}
@@ -95,10 +95,10 @@ Use this agent to gather missing info, confirm outputs, or deliver the final res
 
 1. 📝 **Collect Initial Preferences**
    - Ensure these exist in context: `user_preferences`, `current_location`, `budget`, `start_date`, `duration`
-   - Otherwise, request them via `get_user_input`.
+   - Otherwise, request them via `get_user_input` with suitable question as string input.
 
 2. 📍 **Recommend Destination (Optional)**
-   - If `destination` is missing or user is unsure:
+   - If `destination` is missing or user is unsure and `travel_date`, `duration`, `budget` are known and there are preferences about accomodation in user preferences, else ask user to fill them :
      → Call `destination_recommender`.
 
 3. 📜 **Check Visa Requirements**
@@ -124,7 +124,7 @@ Use this agent to gather missing info, confirm outputs, or deliver the final res
      → Call `silly_travel_stylist_structured`.
 
 8. 🧳 **Generate Itinerary**
-   - Only if `itinerary_draft` is NOT already in the current context
+   - Only if `itinerary_draft` is NOT already in the current context, if it present go to Send Final Output to User section.
    - And if `destination`, `travel_date`, `duration`, `activity_preferences`,
      `budget`, `accommodation`, `destination_info`, `transportation`,
      `trip_tips`, `visa_info` are available:
@@ -142,7 +142,7 @@ Use this agent to gather missing info, confirm outputs, or deliver the final res
 ⚠️ RULES:
 
 - Only call an agent when all of its required inputs are available in `context`.
-- If something is missing, use `get_user_input` to ask for it.
+- If something is missing, use `get_user_input` to ask for it with reasonable question.
 - Never generate travel content — delegate all logic to appropriate agents.
 - Whenever you want to call an agent, return a JSON with key:
   ```json
@@ -231,7 +231,7 @@ def context_summarizer(state: TripState, text_input: str):
             visa_info
             personalized_itinerary
             duration
-            start_date
+            start_date (in yy-mm-dd format, if year not provided use 2025)
 
             Return only those keys that are found or updated. Do NOT return unrelated or unchanged keys.
 
@@ -380,26 +380,31 @@ if SAVE_GRAPH_IMAGE:
 
 # --- Example Usage ---
 if __name__ == "__main__":
+    from utils import generate_markdown
     # # Example 1: Initial input provides all information
-    # inputs1 = {"chat_history": "I want to plan a 5-day trip to Paris. I'm interested in museums and good food, and my budget is around $1500."}
-    # result1 = chain.invoke(inputs1)
-    # print("\nResult 1:", result1)
+    inputs1 = {"chat_history": "I want to plan a 5-day trip to Paris. I'm interested in museums and good food, and my budget is around $1500."}
+    result1 = chain.invoke(inputs1)
+    print("\nResult 1:", result1)
 
     # # # Example 2: Initial input missing destination
-    # inputs2 = {"chat_history": "I want to plan a trip. What are some popular destinations?"}
+    # inputs2 = {"chat_history": "I want to plan a trip to Barcelona?"}
     # result2 = chain.invoke(inputs2)
     # print("\nResult 2:", result2) # Will likely ask for a destination
 
-    # Example 3: Initial input with destination but missing budget
-    # inputs3 = {"chat_history": "Plan a trip to Vienna, Austria. I live in berlin and my budget is 2988"}
+    # # Example 3: Initial input with destination but missing budget
+    # inputs3 = {"chat_history": "Plan a trip to Vienna, Austria. I live in berlin and my budget is 2988 Euros"}
     # result3 = chain.invoke(inputs3)
     # print("\nResult 3:", result3) # Will likely ask for a budget
 
     # Example 4: Full information provided
-    inputs4 = {"chat_history": "Plan a 7-day adventure trip to Bali for someone traveling from Seville with a budget of $2000. They enjoy hiking and beaches. The trip should start on April 19th 2025."}
-    result4 = chain.invoke(inputs4)
-    print("\nResult 4:", result4)
+    # inputs4 = {"chat_history": "Plan a 7-day adventure trip to Bali for someone traveling from Seville with a budget of $2000. They enjoy hiking and beaches. The trip should start on April 19th 2025."}
+    # result4 = chain.invoke(inputs4)
+    # print("\nResult 4:", result4)
     
+    with open("result1.md","w", encoding="utf8") as f:
+        print("saving output")
+        f.write(f"Inputs: {result1['chat_history']}\n\n")
+        f.write(generate_markdown(result1["destination"], json.loads(result1["itinerary_draft"])))
     
     
     pass

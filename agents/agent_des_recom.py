@@ -4,14 +4,14 @@ import requests
 from langchain.output_parsers import PydanticOutputParser
 from langchain_google_genai import ChatGoogleGenerativeAI
 from google import genai
-from utils_agent import extract_json_from_response
-from tools import get_weather
-from data_models import DestinationRecommendationList
+from .tools import get_weather
+from .data_models import DestinationRecommendationList
 from PIL import Image
 import io
 from dateutil import parser as date_parser
 from datetime import datetime
 from dotenv.main import load_dotenv
+from langsmith import traceable, Client
 
 load_dotenv()
 
@@ -38,8 +38,10 @@ def download_image_bytes(image_url: str) -> Image.Image:
 
 
 client = genai.Client(api_key=GOOGLE_API_KEY)
+langsmith_client = Client()
 # model = genai.GenerativeModel("gemini-2.0-flash-exp")
 
+@traceable(name="image understanding")
 def image_understanding(image_bytes:Image.Image) -> str:
 
     try:
@@ -99,6 +101,7 @@ def clean_preferences_and_extract_image(preferences: str):
     cleaned = re.sub(pattern, '', preferences).strip()
     return cleaned, image_url
 
+@traceable(name="Destination Recommender Agent")
 def destination_recommender(agent_input: dict) -> dict:
     """
     Uses Gemini 2.0-flash=exp to interpret the climate/activity from an image (local or URL),

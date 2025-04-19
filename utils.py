@@ -77,6 +77,16 @@ def generate_markdown(destination : str, itinerary: dict) -> str:
     md += "## 🧳 General Travel Tips\n"
     md += bullet_list(itinerary.get("general_tips", [])) + "\n\n"
 
+    # Transportation 
+    md += "## 🧳 Transportation\n"
+    md += itinerary.get("transportation", "Not Provided") + "\n\n"
+    md += itinerary.get("transportation_budget", "Not Provided") + "\n\n"
+    
+    # Accomodation 
+    md += "## 🧳 Accomodation\n"
+    md += itinerary.get("accomodation", "Not Provided") + "\n\n"
+    md += itinerary.get("accomodation_budget", "Not Provided") + "\n\n"
+
     # Daily Activities
     for day in itinerary.get("daily_activities", []):
         md += format_day(day)
