@@ -1,184 +1,96 @@
+Inputs: [[[[[['Plan a trip to Vienna, Austria. I live in berlin and my budget is 2988 Euros'], 'What date would you like to start your trip and how long will you be staying in Vienna?', "I'll start my trip in June 13th"], 'How long will you be staying in Vienna?', "I'll stay there for 2 days"]]]]
+
 # Vienna, Austria Travel Itinerary
 
 ## 📌 Assumptions
-- Assumed a mid-range budget within your provided 2988 Euros, balancing luxury with cost-effectiveness.
-- Assumed you are interested in a mix of historical sites, cultural experiences, and culinary delights.
-- Assumed you prefer a balance of structured activities and free time for exploration.
+- Direct flight from Berlin to Vienna is the most preferred transportation method based on speed and user budget.
+- User prefers a mix of cultural experiences, sightseeing, and culinary experiences.
+- User is comfortable using public transportation within Vienna.
 
 ## 🧳 General Travel Tips
-- Book accommodations and transportation in advance, especially if traveling during peak season.
-- Purchase a Vienna Pass if you plan to visit many museums and attractions.
-- Utilize Vienna's excellent public transportation system to get around efficiently.
-- Learn a few basic German phrases to enhance your interactions with locals.
-- Be aware of local customs and etiquette, such as greeting people with a handshake and avoiding loud conversations in public places.
+- Purchase a Vienna Pass for access to many attractions and unlimited use of public transportation.
+- Wear comfortable shoes, as you'll be doing a lot of walking.
+- Learn a few basic German phrases, although English is widely spoken.
+- Try traditional Viennese cuisine, such as Wiener Schnitzel and Sachertorte.
+- Be aware of pickpockets in crowded tourist areas.
 
 ## 🧳 Transportation
-Flight from Berlin to Vienna
+Flight (Berlin to Vienna), Public Transportation (Vienna)
 
-€122 - €260 (one-way flight)
+€75 - €260 (roundtrip flight) + €20 (2-day Vienna public transportation pass)
 
 ## 🧳 Accomodation
-Hotel Sacher Wien, Philharmoniker Str. 4, 1010 Wien, Austria
+Hotel Sacher Wien
 
-€300-€500 per night (Consider a shorter stay to fit budget, perhaps 2 nights)
+Hotel Sacher Wien is pre-booked. No budget to be accounted for.
 
-## 📅 Day 1: Arrival in Vienna & Imperial Exploration
+## 📅 Day 1: Imperial Vienna & Culinary Delights
 
 **💡 Daily Tips:**
-> Take the CAT train from the airport to Wien Mitte for a quick transfer to the city center. Purchase a Vienna Pass if you plan to visit many museums.
+> Start your day early to avoid crowds at popular attractions. Consider taking a guided walking tour to learn more about the city's history.
 
 
 **🗓️ Activities:**
 
-**📝 Arrive at Vienna Airport (VIE) and Transfer to Hotel Sacher**
-> Take the City Airport Train (CAT) to Wien Mitte, then a short taxi or tram ride to Hotel Sacher.
-> - 🕒 Time: 9:00 AM (1.5 hours)
-> - 💸 Budget: €25
-> - 🔖 Type: Transportation
-
-**📝 Check in at Hotel Sacher**
-> Check in, leave your luggage, and take a moment to admire the hotel's opulent interiors.
-> - 🕒 Time: 10:30 AM (30 minutes)
-> - 💸 Budget: N/A
-> - 🔖 Type: Accommodation
-
 **📝 Hofburg Palace Visit**
-> Explore the former winter residence of the Habsburg emperors, including the Imperial Apartments, Sisi Museum, and Silver Collection.
-> - 🕒 Time: 11:00 AM (3 hours)
-> - 💸 Budget: €20-€30 (depending on included exhibitions)
+> Explore the winter residence of the Habsburg emperors. Visit the Imperial Apartments, Sisi Museum, and Silver Collection.
+> - 🕒 Time: 9:00 AM (3 hours)
+> - 💸 Budget: €20-€30 (depending on included exhibits)
 > - 🔖 Type: Sightseeing
 
-**📝 Lunch at a Traditional Viennese 'Beisl'**
-> Enjoy a traditional Viennese lunch at a 'Beisl' (a traditional Austrian pub) such as Figlmüller for Wiener Schnitzel.
-> - 🕒 Time: 2:00 PM (1 hour)
+**📝 Lunch at Figlmüller**
+> Enjoy a traditional Wiener Schnitzel at Figlmüller, famous for its large and delicious schnitzels.
+> - 🕒 Time: 12:30 PM (1.5 hours)
 > - 💸 Budget: €20-€30
 > - 🔖 Type: Food
 
-**📝 Spanish Riding School Performance (Optional)**
-> If available, attend a performance or training session of the Lipizzaner horses at the Spanish Riding School. Book tickets well in advance!
-> - 🕒 Time: 3:30 PM (1.5 hours)
-> - 💸 Budget: €30-€150 (depending on the type of performance)
-> - 🔖 Type: Cultural Performance
+**📝 St. Stephen's Cathedral Climb**
+> Climb the south tower of St. Stephen's Cathedral for panoramic views of Vienna.
+> - 🕒 Time: 2:30 PM (2 hours)
+> - 💸 Budget: €5-€10
+> - 🔖 Type: Sightseeing
 
-**📝 Dinner at Plachutta Wollzeile**
-> Indulge in Tafelspitz (boiled beef), a Viennese specialty, at Plachutta Wollzeile.
-> - 🕒 Time: 7:00 PM (2 hours)
-> - 💸 Budget: €40-€60
+**📝 Sachertorte at Hotel Sacher**
+> Indulge in a slice of the original Sachertorte at Hotel Sacher's cafe.
+> - 🕒 Time: 4:30 PM (1 hour)
+> - 💸 Budget: €8-€12
 > - 🔖 Type: Food
 
-## 📅 Day 2: Art, Music, and Sweet Treats
+**📝 Evening at the Vienna State Opera**
+> Attend a performance at the Vienna State Opera or take a guided tour of the building.
+> - 🕒 Time: 7:00 PM (3 hours)
+> - 💸 Budget: €30-€200 (depending on the performance)
+> - 🔖 Type: Entertainment
+
+## 📅 Day 2: Schönbrunn Palace & Danube River
 
 **💡 Daily Tips:**
-> Wear comfortable shoes, as you'll be doing a lot of walking. Check the opening hours of museums and attractions in advance.
+> Purchase tickets for Schönbrunn Palace in advance to avoid long queues. Consider a boat tour on the Danube for a relaxing experience.
 
 
 **🗓️ Activities:**
 
-**📝 Belvedere Palace and Museum**
-> Visit the Belvedere Palace to admire Gustav Klimt's 'The Kiss' and other Austrian art masterpieces. Explore the Upper and Lower Belvedere and the beautiful gardens.
-> - 🕒 Time: 9:30 AM (3 hours)
-> - 💸 Budget: €22-€28
-> - 🔖 Type: Museum Visit
+**📝 Schönbrunn Palace Visit**
+> Explore Schönbrunn Palace, the former summer residence of the Habsburgs. Visit the palace rooms, gardens, and Gloriette.
+> - 🕒 Time: 9:00 AM (4 hours)
+> - 💸 Budget: €22-€30 (depending on included attractions)
+> - 🔖 Type: Sightseeing
 
-**📝 Naschmarkt Exploration & Lunch**
-> Wander through Vienna's vibrant Naschmarkt, sampling local and international delicacies. Have lunch at one of the market's many food stalls.
+**📝 Naschmarkt Visit**
+> Explore Naschmarkt, Vienna's largest open-air market. Sample local and international foods, browse souvenirs, and enjoy the vibrant atmosphere.
 > - 🕒 Time: 1:00 PM (2 hours)
-> - 💸 Budget: €20-€40
-> - 🔖 Type: Market Visit & Food
+> - 💸 Budget: €20-€40 (for lunch and snacks)
+> - 🔖 Type: Shopping/Food
 
-**📝 House of Music (Haus der Musik)**
-> An interactive museum dedicated to sound and music. Explore the history of the Vienna Philharmonic and experiment with sound installations.
+**📝 Danube River Cruise**
+> Take a boat tour on the Danube River for scenic views of Vienna's skyline and surrounding landscapes.
 > - 🕒 Time: 3:30 PM (2 hours)
-> - 💸 Budget: €16
-> - 🔖 Type: Museum Visit
-
-**📝 Sachertorte at Cafe Sacher**
-> Enjoy a slice of the original Sachertorte at Cafe Sacher (or a less crowded alternative like Cafe Demel).
-> - 🕒 Time: 6:00 PM (1 hour)
-> - 💸 Budget: €10-€15
-> - 🔖 Type: Food
-
-**📝 Vienna State Opera (Wiener Staatsoper) Tour or Performance**
-> Take a guided tour of the Vienna State Opera or, if possible, attend a performance. Book tickets well in advance!
-> - 🕒 Time: 7:30 PM (2-3 hours)
-> - 💸 Budget: €9-€200+ (depending on the type of tour or performance)
-> - 🔖 Type: Cultural Performance/Tour
-
-## 📅 Day 3: Danube Tower and Prater Fun
-
-**💡 Daily Tips:**
-> The Prater amusement park is very popular, especially on weekends. Be prepared for crowds and potential queues.
-
-
-**🗓️ Activities:**
-
-**📝 Danube Tower (Donauturm)**
-> Ascend the Danube Tower for panoramic views of Vienna and the Danube River. Have coffee or lunch at the revolving restaurant.
-> - 🕒 Time: 10:00 AM (2 hours)
-> - 💸 Budget: €18 (tower entrance) + food/drinks
+> - 💸 Budget: €20-€30
 > - 🔖 Type: Sightseeing
 
 **📝 Prater Amusement Park**
-> Spend the afternoon at the Prater amusement park, riding the iconic Giant Ferris Wheel (Riesenrad) and enjoying other attractions.
-> - 🕒 Time: 1:00 PM (4 hours)
-> - 💸 Budget: €30-€50 (depending on the number of rides)
-> - 🔖 Type: Amusement Park
-
-**📝 Dinner in the Prater**
-> Enjoy dinner at one of the restaurants in the Prater, such as Schweizerhaus (known for its pork knuckle).
-> - 🕒 Time: 6:00 PM (2 hours)
-> - 💸 Budget: €30-€50
-> - 🔖 Type: Food
-
-## 📅 Day 4: Schönbrunn Palace and Gardens
-
-**💡 Daily Tips:**
-> Consider purchasing a Schönbrunn Palace ticket in advance to skip the ticket line.
-
-
-**🗓️ Activities:**
-
-**📝 Schönbrunn Palace**
-> Visit Schönbrunn Palace, the former summer residence of the Habsburgs. Take a tour of the Imperial Apartments and explore the extensive gardens.
-> - 🕒 Time: 9:00 AM (4 hours)
-> - 💸 Budget: €22-€30 (depending on the type of tour)
-> - 🔖 Type: Sightseeing
-
-**📝 Schönbrunn Gardens and Gloriette**
-> Explore the Schönbrunn Gardens, including the Neptune Fountain, Roman Ruin, and the Gloriette (offering panoramic views).
-> - 🕒 Time: 1:00 PM (2 hours)
-> - 💸 Budget: Free (entry to gardens); €5 (Gloriette viewing platform)
-> - 🔖 Type: Outdoor Activity
-
-**📝 Tiergarten Schönbrunn (Vienna Zoo)**
-> If time and interest allow, visit Tiergarten Schönbrunn, the oldest zoo in the world, located within the Schönbrunn Palace grounds.
-> - 🕒 Time: 3:00 PM (2 hours)
-> - 💸 Budget: €24
-> - 🔖 Type: Attraction
-
-**📝 Heuriger Evening in Grinzing**
-> Experience a traditional Heuriger evening in Grinzing, a wine-growing village on the outskirts of Vienna. Enjoy local wine, food, and music at a Heuriger (wine tavern).
-> - 🕒 Time: 7:00 PM (3 hours)
-> - 💸 Budget: €30-€50
-> - 🔖 Type: Cultural Experience & Food
-
-## 📅 Day 5: Departure
-
-**💡 Daily Tips:**
-> Allow ample time for travel to the airport, especially if you are travelling during rush hour.
-
-
-**🗓️ Activities:**
-
-**📝 Explore local cafe**
-> Stop for coffee and breakfast
-> - 🕒 Time: 8:00 AM (1 hour)
-> - 💸 Budget: €10-€20
-> - 🔖 Type: Food
-
-**📝 Departure from Vienna (VIE)**
-> Transfer from Hotel Sacher to Vienna Airport (VIE) for your flight back to Berlin.
-> - 🕒 Time: 10:00 AM (1.5 hours)
-> - 💸 Budget: €25 (CAT train)
-> - 🔖 Type: Transportation
+> Visit the Prater amusement park and take a ride on the iconic Giant Ferris Wheel for stunning views of the city.
+> - 🕒 Time: 6:00 PM (3 hours)
+> - 💸 Budget: €20-€40 (depending on the rides)
+> - 🔖 Type: Entertainment
 
