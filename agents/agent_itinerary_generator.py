@@ -40,7 +40,7 @@ Your goal is to create a structured itinerary based on:
 - visa information
 - budget
 
-Only suggest realistic, enjoyable, and culturally respectful tourist activities. Include food, sightseeing, walking tours, or nature experiences when appropriate.
+Only suggest realistic, enjoyable, and culturally respectful tourist activities. Include food, sightseeing, walking tours, or nature experiences when appropriate. For the transportation and accomodation, if there are multiple options, select the best option in terms of comfort and budget.
 
 Respond in the following JSON format:
 {format_instructions}
